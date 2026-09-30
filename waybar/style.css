@@ -109,22 +109,23 @@ window#waybar.hidden {
 /* The active one is the accent, bold, and gets a mark under it. Bold and the
  * underline are both needed: the accent green alone is low contrast against a
  * bright sky, and the underline carries the identification where the color
- * cannot. */
+ * cannot. No text-underline-offset: GTK's CSS parser knows no such property,
+ * and waybar 0.15 treats an unknown property as fatal and exits. */
 #workspaces button.active {
   color: @accent;
   font-weight: bold;
   text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 /* The now-playing line. The dimmer foreground from the theme is not usable
  * here: this is the one module that sits over the brightest part of the
  * wallpaper, and at #a1af9c on a light sky it disappears. The full foreground
- * plus the inherited shadow is the legibility floor. */
+ * plus the inherited shadow is the legibility floor. No max-width: not GTK
+ * CSS either (waybar 0.15 exits on it), and redundant anyway — archy-marquee
+ * already windows the text to 32 characters. */
 #custom-marquee {
   color: @bright_foreground;
   padding-left: 6px;
-  max-width: 320px;
 }
 
 #clock {

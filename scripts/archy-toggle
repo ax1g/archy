@@ -35,7 +35,10 @@ bar)
     pkill -x waybar
     notify "Bar hidden" low
   else
-    setsid -f waybar >/dev/null 2>&1
+    # Same command line as autostart and archy-theme apply. A bare waybar
+    # falls back to ~/.config/waybar, which does not exist here, and comes up
+    # with the built-in defaults — stock layout, stock colors, white bar.
+    setsid -f waybar -c "$ARCHY_HOME/waybar/config.jsonc" -s "$ARCHY_GENERATED/waybar.css" >/dev/null 2>&1
     notify "Bar shown" low
   fi
   ;;
