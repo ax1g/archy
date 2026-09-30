@@ -271,10 +271,23 @@ else
   info "no literal colors in the bar config"
 fi
 
+# window#waybar must set its own background. With none set, GTK falls back to
+# the default theme background — white — and the bar is a white panel with
+# transparent holes where the modules are.
+if python3 - "$REPO_DIR/waybar/style.css" <<'PY' 2>/dev/null; then
+import re, sys
+css = open(sys.argv[1]).read()
+m = re.search(r'window#waybar\s*\{(.*?)\}', css, re.S)
+sys.exit(0 if m and 'background-color' in m.group(1) else 1)
+PY
+  info "window#waybar sets its own background"
+else
+  fail "window#waybar sets no background-color; GTK falls back to white"
+fi
 # waybar 0.15 treats an unknown CSS property as fatal and exits on launch, so
-# the bar is gone with nothing in the logs. These two web-CSS properties did
-# exactly that; GTK knows neither. (Comments excluded: the ban is documented
-# in the file.)
+# the bar is gone with nothing in the logs. text-underline-offset and
+# max-width did exactly that; GTK knows neither. (Comments excluded from the
+# grep: the ban is documented in the file.)
 if grep -vE '^\s*\*' "$REPO_DIR/waybar/style.css" | grep -E 'text-underline-offset|max-width' >/dev/null; then
   fail "waybar/style.css uses a property GTK does not know; the bar will exit on launch"
 else

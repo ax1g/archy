@@ -24,8 +24,11 @@
   border-radius: 0;
 }
 
-/* No background-color here on purpose. archy-toggle sets the opacity when the
- * bar is toggled off, so the transition has something to act on.
+/* background-color: transparent is what actually makes the bar a strip over
+ * the wallpaper. Omitting it does not: with no background set on
+ * window#waybar, GTK falls back to the default theme background, which is
+ * white. The modules below set their own transparent background, so a bar
+ * without this rule is a white panel with transparent holes in it.
  *
  * What keeps the text readable over a photograph is the text-shadow on every
  * module, not the bar background. A dark green-gray fill would have been easier
@@ -37,6 +40,7 @@
  * carry the shape. One pass alone leaves thin strokes like the network and
  * bluetooth icons unreadable over a light sky. */
 window#waybar {
+  background-color: transparent;
   color: @bright_foreground;
   text-shadow:
     0 0 2px @darker_background,
