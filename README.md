@@ -69,9 +69,9 @@ A few of these are not the obvious choice, so the reasoning is here:
    Two details in it matter. The locale and `PATH` blocks sit **above** the
    `[[ $- != *i* ]] && return`, because a script run over SSH is not interactive
    and would otherwise get neither. And `.bashrc` is a replace rather than a
-   merge: `install.sh` refuses to overwrite an existing one and prints the
-   command to adopt the repo's copy, because the file on a real machine holds
-   exports that are not in any repo.
+   merge: `install.sh` moves an existing one to a timestamped `.bak` and links
+   the repo's copy, because the file on a real machine holds exports that are
+   not in any repo but the prompt is the repo's to own.
 
 7. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
    cascade, the clipboard chords and the region picker's transient bindings are
@@ -92,16 +92,18 @@ the user config as the real user. Concretely it symlinks the checkout to
 `~/.config/archy`, symlinks `hypr/` to `~/.config/hypr`, links the scripts
 into `~/.local/bin`, links `Xresources` to `~/.Xresources`, links the
 OpenCode config into `~/.config/opencode`, installs the vendored cursor
-theme, and generates the stylesheets. It is idempotent, so after every
-`git pull`:
+theme, generates the stylesheets, reloads the running compositor, and sets
+the wallpaper. It is idempotent, so after every `git pull`:
 
 ```sh
 git -C ~/archy pull && sudo ~/archy/install.sh
 ```
 
-If `~/.config/hypr` is already a real directory the installer leaves it alone
-and tells me to move it aside. That is deliberate: I want the old config
-recoverable while I am still finding out whether I like the new one.
+If `~/.config/hypr` is already a real directory the installer moves it to a
+timestamped `.bak` and links the repo's `hypr/` in its place, so a bare
+`Hyprland` boots straight into this config with nothing left to do by hand.
+The old config stays recoverable next to it while I am still finding out
+whether I like the new one.
 
 **Everyday tools.** `apps.txt` is the list of what I actually use, grouped and
 annotated rather than a flat 180-line dump of `pacman -Qqe`. It is not

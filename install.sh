@@ -4,7 +4,7 @@
 # Run with sudo: it installs the pacman packages, writes the keyd config and
 # the system-wide cursor theme, then links the user config as the real user.
 #
-#   sudo ./install.sh [--force]
+#   sudo ./install.sh
 #   ./install.sh --check    # reports what is missing, changes nothing
 #
 # Idempotent: safe to re-run after every git pull.
@@ -12,14 +12,12 @@
 set -uo pipefail
 
 check_only=0
-force=0
 for arg in "$@"; do
   case "$arg" in
   --check) check_only=1 ;;
-  --force) force=1 ;;
   *)
     echo "Unknown option: $arg" >&2
-    echo "Usage: sudo ./install.sh [--force] | ./install.sh --check [--force]" >&2
+    echo "Usage: sudo ./install.sh | ./install.sh --check" >&2
     exit 1
     ;;
   esac
@@ -125,6 +123,14 @@ REQUIRED_PACKAGES=(
   # Terminal and the emoji picker's typing helper
   kitty
   wtype
+  # The shell: starship draws the prompt (and the blank line above it),
+  # fzf feeds history and file search, zoxide owns cd, eza owns ls, and bat
+  # owns the man pager. Without these the linked bashrc degrades to stock.
+  starship
+  fzf
+  zoxide
+  eza
+  bat
   # The bashrc sources fzf's completions and the login shell reads the profile,
   # so bash needs to know about its own completions.
   bash-completion
@@ -233,7 +239,7 @@ check_kitty_config() {
 # can: getting a keymap wrong locks you out of your own machine until you fix
 # it from a TTY, so the check below is about refusing a bad file rather than
 # installing it.
-KEYD_CONF=/etc/keyd/default.conf
+KEYD_CONF="${ARCHY_KEYD_CONF:-/etc/keyd/default.conf}"
 
 # Parse the file before installing it. keyd has no --check, and a config that
 # fails to parse means no keymap at all, which on a machine where Caps Lock is
@@ -329,8 +335,7 @@ install_keyd() {
 
 check_layout() {
   if [[ -e $ARCHY_HOME ]] && [[ ! -L $ARCHY_HOME ]]; then
-    warn "$ARCHY_HOME exists and is not a symlink. Move it aside first:"
-    warn "  mv $ARCHY_HOME $ARCHY_HOME.bak"
+    info "$ARCHY_HOME exists and is not a symlink; install moves it to a .bak"
   fi
 
   # Hyprland reads ~/.config/hypr; the config lives in ~/.config/archy so the
@@ -338,8 +343,7 @@ check_layout() {
   # same checkout.
   if [[ -e $HYPR_HOME ]] && [[ ! -L $HYPR_HOME ]]; then
     if [[ -d $HYPR_HOME ]]; then
-      warn "$HYPR_HOME is a real directory. This will replace it with a symlink:"
-      warn "  mv $HYPR_HOME $HYPR_HOME.bak"
+      info "$HYPR_HOME is a real directory; install moves it to a .bak and links"
     else
       warn "$HYPR_HOME exists and is not a directory. Remove it first."
     fi
@@ -355,7 +359,7 @@ check_layout() {
 # for exactly this case, so the name still resolves.
 CURSOR_THEME_NAME="macOS"
 CURSOR_SOURCE_DIR="$REPO_DIR/cursors/$CURSOR_THEME_NAME"
-CURSOR_SYSTEM_DIR="/usr/share/icons/$CURSOR_THEME_NAME"
+CURSOR_SYSTEM_DIR="${ARCHY_CURSOR_DIR:-/usr/share/icons/$CURSOR_THEME_NAME}"
 
 cursor_installed() {
   local dir
@@ -398,9 +402,13 @@ install_cursor() {
   fi
 
   rm -rf "$CURSOR_SYSTEM_DIR"
-  cp -a "$CURSOR_SOURCE_DIR" "$CURSOR_SYSTEM_DIR"
-  info "$CURSOR_THEME_NAME cursor theme installed system-wide from the repo"
-  return 0
+  mkdir -p "$(dirname "$CURSOR_SYSTEM_DIR")"
+  if cp -a "$CURSOR_SOURCE_DIR" "$CURSOR_SYSTEM_DIR"; then
+    info "$CURSOR_THEME_NAME cursor theme installed system-wide from the repo"
+    return 0
+  fi
+  warn "could not copy the cursor theme to $CURSOR_SYSTEM_DIR"
+  return 1
 }
 
 check_fonts() {
@@ -477,7 +485,7 @@ check_vscode() {
 }
 
 if ((check_only)); then
-  step "archy check"
+  step "archy check — reporting only, nothing will be changed"
   check_compositor
   check_packages
   check_fonts
@@ -494,20 +502,41 @@ fi
 
 # ---------------------------------------------------------------- install
 
-step "archy install (as $REAL_USER)"
+step "archy install — $REAL_USER's desktop, using sudo for the system parts"
+info "repo: $REPO_DIR"
+info "user home: $REAL_HOME"
+
+# Move a real directory aside with a timestamped backup, so the installer
+# never asks the user to do it by hand and never destroys anything either.
+move_aside() {
+  local path="$1"
+  if [[ -e $path && ! -L $path ]]; then
+    local backup="$path.bak.$(date +%Y%m%d-%H%M%S)"
+    mv "$path" "$backup"
+    info "$(basename "$path"): moved the existing one to $backup"
+  fi
+}
+
+compositor_up() {
+  as_user hyprctl version >/dev/null 2>&1
+}
+
+step "[1/7] system packages — installing what the desktop needs from pacman"
+info "missing ones go in with: pacman -S --needed; the rest are left alone"
 
 # The desktop packages first. --needed leaves what is already there alone;
 # --noconfirm keeps a fresh-machine install unattended.
 mapfile -t to_install < <(missing_packages)
 if ((${#to_install[@]} == 0)) || [[ -z ${to_install[0]} ]]; then
-  info "all required packages installed"
+  info "every required package is already installed, nothing to do"
 else
+  info "installing ${#to_install[@]} package(s): ${to_install[*]}"
   pacman -S --needed --noconfirm "${to_install[@]}"
-  info "packages installed: ${to_install[*]}"
+  info "packages done"
 fi
 
-ensure_dir "$HYPR_HOME"
-ensure_dir "$BIN_DIR"
+step "[2/7] config links — pointing your home at this checkout"
+info "the checkout stays the source of truth: a git pull plus a re-run updates"
 
 link_or_report() {
   local target="$1" link="$2" label="$3"
@@ -522,35 +551,31 @@ link_or_report() {
     fi
     rm -f "$link"
   elif [[ -e $link ]]; then
-    if ((force)); then
-      rm -f "$link"
-    else
-      warn "$link exists and is not a symlink. Not touching it (use --force)."
-      return 1
-    fi
+    move_aside "$link"
   fi
 
   ln -s "$target" "$link"
   ownit "$link"
-  info "$label -> $target"
+  info "$label linked: $link -> $target"
 }
 
 # The whole checkout, so a git pull in this directory is the update mechanism.
+move_aside "$ARCHY_HOME"
 link_or_report "$REPO_DIR" "$ARCHY_HOME" "archy config"
 
-# Hyprland reads ~/.config/hypr/hyprland.lua. The config itself lives in
-# ~/.config/archy/hypr; this is the one file that has to appear where the
-# compositor looks.
-if [[ -d $HYPR_HOME && ! -L $HYPR_HOME ]]; then
-  warn "$HYPR_HOME is a real directory, leaving it alone."
-  warn "To use this config: mv $HYPR_HOME $HYPR_HOME.bak && ln -s"
-  warn "  $REPO_DIR/hypr $HYPR_HOME"
+# Hyprland reads ~/.config/hypr/hyprland.lua by default — no --config flag, no
+# session file. Pointing ~/.config/hypr at the repo's hypr/ is what makes this
+# checkout the main config: a bare Hyprland boots straight into it.
+move_aside "$HYPR_HOME"
+if [[ -L $HYPR_HOME ]] && [[ "$(readlink -f "$HYPR_HOME")" == "$(readlink -f "$REPO_DIR/hypr")" ]]; then
+  info "hypr config already linked: $HYPR_HOME -> $REPO_DIR/hypr"
 else
-  rm -rf "$HYPR_HOME"
+  rm -f "$HYPR_HOME"
   ln -s "$REPO_DIR/hypr" "$HYPR_HOME"
   ownit "$HYPR_HOME"
-  info "hypr -> $REPO_DIR/hypr"
+  info "hypr config linked: $HYPR_HOME -> $REPO_DIR/hypr"
 fi
+ensure_dir "$BIN_DIR"
 
 # Scripts. lib.sh is sourced, not executed, so it goes in without the exec bit
 # being meaningful.
@@ -561,7 +586,7 @@ for script in "$REPO_DIR"/scripts/archy-*; do
   ownit "$BIN_DIR/$name"
 done
 chmod +x "$REPO_DIR"/scripts/archy-* 2>/dev/null
-info "scripts -> $BIN_DIR (${name:-none})"
+info "scripts linked into $BIN_DIR (${name:-none})"
 
 # kitty. This one is not optional: the config starts with an include of
 # generated/kitty.conf, and kitty treats a missing include as a hard error, so a
@@ -574,28 +599,24 @@ link_or_report "$REPO_DIR/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf" "ki
 link_or_report "$REPO_DIR/hypr/Xresources" "$HOME/.Xresources" "Xresources"
 
 # The cursor, from the vendored copy. Never fatal.
-step "cursor"
+step "[3/7] cursor — installing the vendored macOS theme system-wide"
+info "source: $REPO_DIR/cursors/$CURSOR_THEME_NAME, target: $CURSOR_SYSTEM_DIR"
 install_cursor || true
 
-# bashrc and starship.
-#
-# .bashrc is linked, not merged, and the installer will not do it silently: a
-# user's own bashrc holds exports and aliases that are not in the repo, and
-# overwriting one loses them with no way back other than a backup taken here.
-# The repo copy exists so the shell can be rebuilt from scratch, and a machine
-# whose .bashrc already differs should be left alone.
-if [[ -e "$HOME/.bashrc" ]]; then
-  if cmp -s "$REPO_DIR/bashrc" "$HOME/.bashrc"; then
-    info "bashrc already current"
-  else
-    warn "$HOME/.bashrc differs from the repo's copy and is being left alone."
-    warn "To adopt the repo's version:"
-    warn "  mv ~/.bashrc ~/.bashrc.bak && ln -s $REPO_DIR/bashrc ~/.bashrc"
-  fi
+# .bashrc is linked, not merged. A user's own bashrc holds exports and aliases
+# that are not in the repo, so the existing one moves to a timestamped .bak
+# rather than being overwritten.
+step "[4/7] shell, editor and tools — bashrc, starship, vscode, fastfetch, opencode"
+if [[ -e "$HOME/.bashrc" ]] && [[ ! -L "$HOME/.bashrc" ]]; then
+  move_aside "$HOME/.bashrc"
+fi
+if [[ -L "$HOME/.bashrc" ]] && [[ "$(readlink -f "$HOME/.bashrc")" == "$(readlink -f "$REPO_DIR/bashrc")" ]]; then
+  info "bashrc already linked"
 else
+  rm -f "$HOME/.bashrc"
   ln -s "$REPO_DIR/bashrc" "$HOME/.bashrc"
   ownit "$HOME/.bashrc"
-  info "bashrc -> $REPO_DIR/bashrc"
+  info "bashrc linked: $HOME/.bashrc -> $REPO_DIR/bashrc"
 fi
 
 # starship.toml is a straight copy of the one that was already working, so a
@@ -611,21 +632,14 @@ if [[ -d "$REPO_DIR/vscode" ]]; then
   if [[ -d $vscode_dir ]]; then
     ensure_dir "$HOME/.vscode/extensions"
     ext_link="$HOME/.vscode/extensions/archy-theme"
-    if [[ -L $ext_link ]]; then
-      if [[ "$(readlink -f "$ext_link")" == "$(readlink -f "$REPO_DIR/vscode")" ]]; then
-        info "vscode theme already linked"
-      else
-        rm -f "$ext_link"
-        ln -s "$REPO_DIR/vscode" "$ext_link"
-        ownit "$ext_link"
-        info "vscode theme -> $REPO_DIR/vscode"
-      fi
-    elif [[ -e $ext_link ]]; then
-      warn "$ext_link exists and is not a symlink; leaving it"
+    if [[ -L $ext_link ]] && [[ "$(readlink -f "$ext_link")" == "$(readlink -f "$REPO_DIR/vscode")" ]]; then
+      info "vscode theme already linked"
     else
+      move_aside "$ext_link"
+      rm -f "$ext_link"
       ln -s "$REPO_DIR/vscode" "$ext_link"
       ownit "$ext_link"
-      info "vscode theme -> $REPO_DIR/vscode"
+      info "vscode theme linked: $ext_link -> $REPO_DIR/vscode"
     fi
     link_or_report "$REPO_DIR/vscode/settings.json" "$vscode_dir/settings.json" "vscode settings"
   else
@@ -671,21 +685,48 @@ if [[ -d "$REPO_DIR/opencode" ]]; then
 fi
 
 # keyd: the system keyboard remap. After this point it is live, so it is
-# deliberately the last step that changes system state.
-step "keyd"
+# deliberately ordered after everything the desktop needs to come up.
+step "[5/7] keyd — writing the Caps Lock remap to $KEYD_CONF and reloading it"
+info "your previous keymap is kept beside it as .bak"
 install_keyd || true
 
 # Generate the stylesheets from the current colors file. This runs as the real
 # user: generated/ lives in their checkout, and root-owned files there would
 # break the next theme change.
+step "[6/7] theme — regenerating the waybar, wofi, mako, kitty and lock styles"
 if [[ -x $BIN_DIR/archy-theme ]]; then
   if as_user "$BIN_DIR/archy-theme" sync; then
-    info "generated stylesheets"
+    info "stylesheets regenerated from colors/colors.conf"
   else
-    warn "archy-theme sync failed"
+    warn "archy-theme sync failed; the bar and menus keep their old colors"
   fi
 else
   warn "archy-theme not runnable yet; generated/ will be empty."
+fi
+
+# Reload the running session so it picks up the new config now, not on the
+# next login. A reload does not re-run autostart and does not activate
+# permission rules (screencopy.lua) — those go live on a full restart.
+step "[7/7] session — reloading Hyprland and setting the wallpaper"
+if compositor_up; then
+  info "telling the running compositor to reload its config"
+  if as_user hyprctl reload; then
+    info "compositor reloaded"
+  else
+    warn "hyprctl reload failed; log out and back in to pick up the config"
+  fi
+
+  # A reload never re-runs autostart, so the wallpaper would stay unset until
+  # the next login. Set the default now: archy-wallpaper starts swww-daemon
+  # itself when it is missing.
+  if as_user "$BIN_DIR/archy-wallpaper" set; then
+    info "wallpaper set"
+  else
+    warn "wallpaper not set — is swww installed? (step 1 should have put it in)"
+  fi
+else
+  info "no compositor running (SSH or TTY install); skipping reload and wallpaper"
+  info "both happen on their own at the next login"
 fi
 
 # The live checks need the user's session (hyprctl, fonts, home paths), so
@@ -703,11 +744,19 @@ fi
 
 step ""
 echo "Installed to $ARCHY_HOME"
-echo "Start it with: Hyprland (the session), or hyprland --config $ARCHY_HOME/hypr"
+echo ""
+echo "archy is now the default Hyprland config: ~/.config/hypr points at this"
+echo "checkout, so a bare Hyprland boots straight into it. If you ever need the"
+echo "explicit form, --config takes the file, not the directory:"
+echo "  hyprland --config $ARCHY_HOME/hypr/hyprland.lua"
 echo ""
 echo "Notes:"
+echo "  - The running shell keeps its old config: open a new terminal (or run"
+echo "    'exec bash') to get the new prompt."
 echo "  - colors/colors.conf is the only file to edit to retheme."
 echo "    Run 'archy-theme apply' afterward."
+echo "  - Permission rules (screencopy) activate on a full compositor restart,"
+echo "    never on reload. Log out and back in once after this install."
 echo "  - Put wallpapers in $ARCHY_HOME/wallpapers/, then SUPER+CTRL+SPACE."
 echo "  - Log in through a display manager if you want one; archy does not"
 echo "    install one, and a bare Hyprland session boots straight into it."
