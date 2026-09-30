@@ -163,6 +163,84 @@ check_layout() {
   fi
 }
 
+# The macOS Apple cursor. https://github.com/ful1e5/apple_cursor, GPL-3.0.
+#
+# Not a pacman package in the official repos, so a new machine has no cursor at
+# all and falls back to the default arrow with nothing in the logs. The AUR
+# package is the easy path; the release tarball is the dependency-free one.
+CURSOR_THEME_NAME="macOS"
+CURSOR_SOURCE_URL="https://github.com/ful1e5/apple_cursor/releases/latest/download/macOS.tar.gz"
+
+cursor_installed() {
+  local dir
+  for dir in "$HOME/.local/share/icons" "$HOME/.icons" /usr/share/icons; do
+    # index.theme is what fontconfig reads to know the theme exists. Without it
+    # the directory is just a pile of files and the theme does not resolve.
+    [[ -r "$dir/$CURSOR_THEME_NAME/index.theme" ]] && return 0
+  done
+  return 1
+}
+
+check_cursor() {
+  if cursor_installed; then
+    info "$CURSOR_THEME_NAME cursor theme installed"
+    return
+  fi
+
+  warn "$CURSOR_THEME_NAME cursor theme not found. The pointer will be the"
+  warn "default arrow everywhere, because a native Wayland app has no cursor of"
+  warn "its own and the compositor draws it from gsettings."
+  warn ""
+  warn "Either install the AUR package:"
+  warn "  paru -S apple_cursor"
+  warn ""
+  warn "Or fetch the release tarball and unpack it into ~/.local/share/icons:"
+  warn "  curl -L $CURSOR_SOURCE_URL \\"
+  warn "    | tar -xz -C ~/.local/share/icons"
+}
+
+# Install it if missing. Uses whichever of an AUR helper, the tarball, or
+# nothing is available, in that order, and never fails the install: a missing
+# cursor is a cosmetic problem, and refusing to finish over one would be worse.
+install_cursor() {
+  cursor_installed && {
+    info "$CURSOR_THEME_NAME cursor theme already installed"
+    return 0
+  }
+
+  local helper=""
+  for candidate in paru yay pikaur trizen; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      helper="$candidate"
+      break
+    fi
+  done
+
+  if [[ -n $helper ]]; then
+    info "installing the $CURSOR_THEME_NAME cursor theme with $helper"
+    if "$helper" -S --needed --noconfirm apple_cursor; then
+      return 0
+    fi
+    warn "$helper failed; falling back to the release tarball"
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    mkdir -p "$HOME/.local/share/icons"
+    info "fetching the $CURSOR_THEME_NAME cursor theme from the release tarball"
+    if curl -fsSL "$CURSOR_SOURCE_URL" | tar -xz -C "$HOME/.local/share/icons"; then
+      return 0
+    fi
+    warn "could not fetch $CURSOR_SOURCE_URL"
+  else
+    warn "no AUR helper and no curl; skipping the cursor theme"
+  fi
+
+  warn ""
+  warn "The cursor theme is missing. Install it with:"
+  warn "  paru -S apple_cursor"
+  return 1
+}
+
 check_fonts() {
   # Matched with bash's own pattern matching rather than a pipe into grep -q.
   #
@@ -200,6 +278,7 @@ if ((check_only)); then
   check_compositor
   check_packages
   check_fonts
+  check_cursor
   check_layout
   step ""
   echo "Nothing was changed. Run without --check to install."
@@ -263,6 +342,15 @@ done
 chmod +x "$REPO_DIR"/scripts/archy-* 2>/dev/null
 info "scripts -> $BIN_DIR (${name:-none})"
 
+# X resources for XWayland clients. The file lives in the repo, and this is the
+# conventional path that both `xrdb` and X apps look at, so linking it keeps one
+# copy and the expected location.
+link_or_report "$REPO_DIR/hypr/Xresources" "$HOME/.Xresources" "Xresources"
+
+# The cursor, if it is not already here. Never fatal.
+step "cursor"
+install_cursor || true
+
 # Generate the stylesheets from the current colors file.
 if [[ -x $BIN_DIR/archy-theme ]]; then
   "$BIN_DIR/archy-theme" sync && info "generated stylesheets"
@@ -273,6 +361,7 @@ fi
 step "archy checks"
 check_compositor
 check_fonts
+check_cursor
 
 step ""
 echo "Installed to $ARCHY_HOME"

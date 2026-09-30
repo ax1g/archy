@@ -63,6 +63,8 @@ local counts = {}
 local binds = {}
 local unbound = {}
 local start_callbacks = {}
+local env = {}
+local ran = {}
 
 local function record(name)
   counts[name] = (counts[name] or 0) + 1
@@ -127,6 +129,7 @@ local function build()
           error("archy-test: hl.env expects (name, value), got " .. n .. " arg(s)", 2)
         end
         record("env")
+        env[args[1]] = args[2]
         return nil
       end
 
@@ -213,12 +216,15 @@ end
 local hl = build()
 
 -- hl.exec_cmd and hl.dispatch run shell commands for real. Under test they are
--- recorded, never run.
+-- recorded, never run. The recorded strings are what the cursor check below
+-- inspects, since the gsettings writes happen inside the session-start
+-- callback rather than at load time.
 hl.exec_cmd = function(cmd)
   if type(cmd) ~= "string" then
     error("archy-test: hl.exec_cmd expects a string, got " .. type(cmd), 2)
   end
   record("exec")
+  ran[#ran + 1] = cmd
   return nil
 end
 hl.dispatch = function(d)
@@ -315,6 +321,62 @@ for i, fn in ipairs(start_callbacks) do
 end
 if #start_callbacks > 0 then
   print("  all " .. #start_callbacks .. " ran clean")
+end
+
+-- The cursor is the one setting with two independent paths, and getting only
+-- one of them is the failure that looks like it half worked: a macOS pointer
+-- inside X11 apps and the default arrow everywhere else, with no error
+-- anywhere. So check that the XCursor vars, the hyprcursor vars, and the
+-- gsettings write in the session-start callback are all present and agree.
+print("")
+print("cursor wiring")
+
+local function check_cursor()
+  local problems = {}
+
+  local x_theme, x_size = env.XCURSOR_THEME, env.XCURSOR_SIZE
+  local h_theme, h_size = env.HYPRCURSOR_THEME, env.HYPRCURSOR_SIZE
+
+  if not (x_theme and x_size) then
+    problems[#problems + 1] = "XCURSOR_THEME/XCURSOR_SIZE not set (XWayland apps get no theme)"
+  end
+  if not (h_theme and h_size) then
+    problems[#problems + 1] = "HYPRCURSOR_THEME/HYPRCURSOR_SIZE not set (compositor cursor unaffected)"
+  end
+  if x_theme and h_theme and x_theme ~= h_theme then
+    problems[#problems + 1] = "theme mismatch: XCURSOR_THEME=" .. x_theme .. " but HYPRCURSOR_THEME=" .. h_theme
+  end
+  if x_size and h_size and x_size ~= h_size then
+    problems[#problems + 1] = "size mismatch: XCURSOR_SIZE=" .. x_size .. " but HYPRCURSOR_SIZE=" .. h_size
+  end
+
+  -- The compositor takes the theme from gsettings, not the env, so the
+  -- session-start callback has to write it.
+  local wrote_theme, wrote_size = false, false
+  for _, cmd in ipairs(ran) do
+    if cmd:match("gsettings set org%.gnome%.desktop%.interface cursor%-theme") then wrote_theme = true end
+    if cmd:match("gsettings set org%.gnome%.desktop%.interface cursor%-size") then wrote_size = true end
+  end
+  if not (wrote_theme and wrote_size) then
+    problems[#problems + 1] = "session start does not set gsettings cursor-theme/cursor-size"
+  end
+
+  if #problems > 0 then
+    for _, p in ipairs(problems) do
+      print("  MISSING: " .. p)
+    end
+    return false
+  end
+
+  print(string.format("  %s at %s, set for XWayland, hyprcursor and gsettings",
+    x_theme, x_size))
+  return true
+end
+
+if not check_cursor() then
+  print("")
+  print("FAIL")
+  os.exit(1)
 end
 
 print("")

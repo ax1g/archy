@@ -54,6 +54,9 @@ require("hypr.windows")
 require("hypr.tiling")
 require("hypr.bindings")
 
+-- Cursor, after the bindings that read it (SUPER+CTRL+Z zoom).
+require("hypr.cursor")
+
 -- Loaded last of the interactive pieces: the cascade owns the new-window hook
 -- and the console owns the specialWorkspaceIn/Out animations, both of which
 -- have to win over looknfeel.

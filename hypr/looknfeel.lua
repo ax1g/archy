@@ -4,9 +4,8 @@
 local theme = require("hypr.theme")
 local c = theme.colors
 
--- Apple macOS pointer theme, installed under ~/.local/share/icons/macOS.
-hl.env("XCURSOR_THEME", "macOS")
-hl.env("XCURSOR_SIZE", "40")
+-- The cursor lives in cursor.lua, because the theme name and size have to be
+-- set in two places to actually take effect.
 
 -- Bolder small glyphs on low-DPI 1080p. Left disabled: fonts read too heavy
 -- with stem darkening off on this panel. Uncomment to try it again.

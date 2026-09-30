@@ -33,14 +33,25 @@ A few of these are not the obvious choice, so the reasoning is here:
    is dimmer. archy-brightness stores the value and reapplies it at login,
    because gamma is compositor state and does not survive a restart.
 
-2. Wofi handles the notification actions. mako draws the notification and hands
+2. The pointer is the macOS Apple cursor, and it takes two settings to make
+   that happen, which is the single easiest thing to get half right here.
+   `XCURSOR_THEME` and `XCURSOR_SIZE` are read by XWayland clients only — a
+   native Wayland app has no cursor of its own, the compositor draws it, and
+   hyprcursor takes the theme from gsettings while
+   `cursor:sync_gsettings_theme` is on. Both are in `hypr/cursor.lua`, which is
+   the only file to touch to change it. The theme is from
+   [apple_cursor](https://github.com/ful1e5/apple_cursor) (GPL-3.0) and is not
+   an official package, so `install.sh` puts it in place if it is missing:
+   AUR helper first, release tarball as the fallback.
+
+3. Wofi handles the notification actions. mako draws the notification and hands
    the buttons to wofi, so there is one overlay style instead of two.
 
-3. No `uwsm-app`. Apps launch with plain `setsid`, so a keybind-started process
+4. No `uwsm-app`. Apps launch with plain `setsid`, so a keybind-started process
    is a child of the compositor rather than a systemd scope. If I ever want
    scoped units, it goes back in `o.launch` in `hypr/helpers.lua`.
 
-4. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
+5. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
    cascade, the clipboard chords and the region picker's transient bindings are
    stateful enough that imperative code is clearer than the declarative form.
 
@@ -67,7 +78,8 @@ cd ~/archy
 ```
 
 `install.sh` symlinks the checkout to `~/.config/archy`, symlinks `hypr/` to
-`~/.config/hypr`, links the scripts into `~/.local/bin`, and generates the
+`~/.config/hypr`, links the scripts into `~/.local/bin`, links `Xresources` to
+`~/.Xresources`, installs the cursor theme if it is missing, and generates the
 stylesheets. It is idempotent, so after every `git pull`:
 
 ```sh
@@ -77,6 +89,22 @@ git -C ~/archy pull && ~/archy/scripts/install.sh
 If `~/.config/hypr` is already a real directory the installer leaves it alone
 and tells me to move it aside. That is deliberate: I want the old config
 recoverable while I am still finding out whether I like the new one.
+
+**Cursor.** The macOS Apple cursor, which is not an official package, so
+nothing installs it by default. `install.sh` fetches it when it is missing —
+AUR helper if there is one, otherwise the release tarball — and never fails the
+install over it, because a missing cursor is cosmetic. To do it by hand:
+
+```sh
+paru -S apple_cursor
+# or
+curl -L https://github.com/ful1e5/apple_cursor/releases/latest/download/macOS.tar.gz \
+  | tar -xz -C ~/.local/share/icons
+```
+
+`install.sh --check` looks for `index.theme` inside the theme directory, since
+that is what fontconfig reads — a directory of cursor files without it does not
+resolve and the pointer silently stays the default arrow.
 
 **Fonts.** `ttf-jetbrains-mono-nerd`, the full weight set. The `-basic`
 package has only Regular, Bold, Italic and BoldItalic, and kitty here is set to
@@ -101,6 +129,7 @@ archy/
 │   ├── helpers.lua        the o.* layer over Hyprland's hl.* API
 │   ├── theme.lua          reads colors/colors.conf
 │   ├── envs.lua           environment variables
+│   ├── cursor.lua         cursor theme and size
 │   ├── monitors.lua       output, mode, scale
 │   ├── input.lua          keyboard, mouse, touchpad
 │   ├── looknfeel.lua      gaps, decoration, blur, animation
