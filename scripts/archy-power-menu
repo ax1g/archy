@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# archy:power-menu -- wofi power and session menu.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+# tab-separated label<TAB>command. The lock entry cannot go through eval: its
+# action is another archy script, and indirection there is pointless.
+options=$'Lock\t'"$ARCHY_BIN_DIR/archy-lock"
+options+=$'\nLog out\thyprctl dispatch "hl.dsp.exit()"'
+options+=$'\nReboot\tsystemctl reboot'
+options+=$'\nPower off\tsystemctl poweroff'
+options+=$'\nSuspend\tsystemctl suspend'
+
+# Only offer suspend if the machine can actually do it. Stripping the line by
+# exact match, because a partial pattern would leave a truncated entry behind.
+if [[ ! -e /sys/power/state ]] || ! grep -qw standby /sys/power/state 2>/dev/null; then
+  options="$(printf '%s\n' "$options" | grep -v $'^Suspend\t' || true)"
+fi
+
+chosen="$(printf '%s\n' "$options" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Power" \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+action="$(printf '%s' "$chosen" | cut -f2)"
+[[ -n $action ]] || exit 0
+
+eval "$action" >/dev/null 2>&1

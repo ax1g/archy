@@ -1,0 +1,12 @@
+# X resources applied to XWayland clients at session start.
+! Xft settings apply to any X11 app that draws its own text; native Wayland
+! clients ignore this file entirely.
+Xft.dpi: 96
+Xft.antialias: true
+Xft.hinting: true
+Xft.hintstyle: hintslight
+Xft.rgba: rgb
+
+! Cursor for X11 apps, matching the Hyprland cursor theme.
+Xcursor.size: 40
+Xcursor.theme: macOS

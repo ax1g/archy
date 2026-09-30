@@ -1,0 +1,136 @@
+/* archy: Waybar stylesheet — layout only.
+ *
+ * The palette is NOT here. archy-theme prepends the @define-color block
+ * generated from colors/colors.conf to this file and writes the result to
+ * generated/waybar.css, which is what the bar is started with (-s). That
+ * indirection exists because Waybar accepts exactly one stylesheet, and the
+ * alternative — a palette pasted in here — would be a second copy of every
+ * color and a second thing to forget when retheming.
+ *
+ * The @define-color names this file references are all defined in
+ * colors/colors.conf and emitted by the generator. Adding a color there is
+ * enough; nothing needs changing in this file.
+ */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+window#waybar {
+  background-color: @darker_background;
+  color: @foreground;
+}
+
+window#waybar.hidden {
+  opacity: 0;
+}
+
+/* Modules are transparent so the bar reads as one surface. Only the outermost
+ * ones carry the padding, since the bar is flush to the screen edge. */
+#launcher,
+#window,
+#workspaces,
+#clock,
+#pulseaudio,
+#custom-brightness,
+#cpu,
+#memory,
+#tray {
+  background-color: transparent;
+  padding: 0 8px;
+}
+
+#launcher {
+  color: @accent;
+  font-size: 14px;
+  padding-left: 10px;
+}
+
+#launcher:hover {
+  background-color: @selection;
+}
+
+#workspaces {
+  padding-left: 4px;
+}
+
+#workspaces button {
+  color: @dark_foreground;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 6px;
+  min-width: 20px;
+  border-radius: 0;
+}
+
+#workspaces button:hover {
+  color: @light_foreground;
+}
+
+/* The active workspace is a bottom edge, not a filled block: at 26px tall a
+ * fill competes with the window area underneath it. */
+#workspaces button.active {
+  color: @bright_foreground;
+  border-bottom: 2px solid @accent;
+}
+
+#window {
+  color: @light_foreground;
+}
+
+#tray,
+#pulseaudio,
+#custom-brightness {
+  color: @foreground;
+  font-size: 14px;
+}
+
+#tray {
+  padding-right: 4px;
+}
+
+#tray > .needs-attention {
+  color: @yellow;
+}
+
+#pulseaudio.muted,
+#custom-brightness.muted {
+  color: @dark_foreground;
+}
+
+#pulseaudio:hover,
+#custom-brightness:hover,
+#cpu:hover,
+#memory:hover,
+#clock:hover {
+  background-color: @selection;
+  color: @bright_foreground;
+}
+
+#cpu,
+#memory {
+  color: @dark_foreground;
+}
+
+#clock {
+  color: @light_foreground;
+  font-weight: bold;
+  padding-right: 10px;
+}
+
+/* Warn and critical states. */
+#cpu.warning,
+#memory.warning {
+  color: @yellow;
+}
+
+#cpu.critical,
+#memory.critical,
+#tray > .urgent {
+  color: @red;
+}

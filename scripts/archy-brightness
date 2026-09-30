@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# archy:brightness -- display brightness as a compositor gamma filter.
+#
+# This monitor rejects DDC/CI writes, so brightnessctl and the built-in
+# backlight paths both fail. hyprsunset applies gamma at the compositor level
+# instead, which every output honors: 100 is identity, lower is dimmer.
+#
+# The gamma value lives in compositor state, so it does not survive a
+# compositor restart on its own. archy-brightness restore brings it back at
+# session start.
+#
+# Usage: archy-brightness [<+|->N%|N%|off|on|restore]
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+MIN=15
+MAX=100
+STATE_FILE="$ARCHY_STATE_DIR/brightness"
+
+ensure_running() {
+  pgrep -x hyprsunset >/dev/null || hyprsunset >/dev/null 2>&1 &
+}
+
+current() {
+  local out
+  out="$(hyprctl hyprsunset gamma 2>/dev/null)" || return 1
+  out=$(printf '%s\n' "$out" | grep -o '[0-9]\+' | head -n1)
+  [[ -n $out && $out -ge 0 ]] 2>/dev/null || return 1
+  printf '%s\n' "$out"
+}
+
+save_state() {
+  printf '%s\n' "$1" >"$STATE_FILE" 2>/dev/null
+}
+
+# "restore" is the autostart hook: reapply the last value, and write the file
+# if there is not one yet so the first login has a defined starting point.
+if [[ ${1:-} == "restore" ]]; then
+  if [[ -r $STATE_FILE ]]; then
+    read -r saved <"$STATE_FILE"
+    [[ -n $saved ]] || saved=100
+  else
+    saved=100
+    save_state "$saved"
+  fi
+  ensure_running
+  sleep 0.3
+  hyprctl hyprsunset gamma "$saved" >/dev/null 2>&1
+  exit 0
+fi
+
+case "${1:-}" in
+off)
+  # Blank the outputs rather than dropping to minimum gamma, which would still
+  # leave a lit image on a dark-adapted display.
+  hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' >/dev/null 2>&1
+  exit 0
+  ;;
+on)
+  if hyprctl -j monitors 2>/dev/null |
+    jq -e '[.[] | select(.disabled == false)] | length > 0 and all(.dpmsStatus)' >/dev/null 2>&1; then
+    exit 0
+  fi
+  hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1
+  exit 0
+  ;;
+esac
+
+# No argument: report the current value.
+if [[ $# -eq 0 ]]; then
+  value="$(current 2>/dev/null || echo 100)"
+  ((value < MIN)) && value=$MIN
+  printf '%s\n' "$value"
+  exit 0
+fi
+
+ensure_running
+# hyprsunset answers a moment after it takes over the output; asking for gamma
+# before then reads the old value and every keypress applies the same delta.
+sleep 0.3
+
+value="$(current)" || exit 1
+((value < MIN)) && value=$MIN
+
+step="$1"
+if [[ $step =~ ^([0-9]+)%$ ]]; then
+  target="${BASH_REMATCH[1]}"
+elif [[ $step =~ ^\+([0-9]+)%$ ]]; then
+  target=$((value + BASH_REMATCH[1]))
+elif [[ $step =~ ^([0-9]+)%-$ ]]; then
+  target=$((value - BASH_REMATCH[1]))
+else
+  exit 1
+fi
+
+((target < MIN)) && target=$MIN
+((target > MAX)) && target=$MAX
+
+hyprctl hyprsunset gamma "$target" >/dev/null 2>&1 || exit 1
+
+save_state "$target"
+notify "display-brightness  ${target}%"
+printf '%s\n' "$target"

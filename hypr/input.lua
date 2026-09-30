@@ -1,0 +1,34 @@
+-- Input devices. Defaults are fine on this machine, so this file is mostly
+-- documentation of what is available to change.
+--
+-- Full reference: https://wiki.hypr.land/Configuring/Basics/Variables/#input
+
+-- hl.config({
+--   input = {
+--     kb_layout = "us",
+--     kb_options = "compose:caps,shift:both_capslock_cancel",
+--     kb_variant = "intl",
+--     repeat_rate = 40,
+--     repeat_delay = 250,
+--     numlock_by_default = true,
+--     sensitivity = 0.35,
+--     accel_profile = "flat",
+--
+--     touchpad = {
+--       natural_scroll = true,
+--       clickfinger_behavior = true,
+--       scroll_factor = 0.4,
+--       disable_while_typing = false,
+--       drag_3fg = 1,
+--     },
+--   },
+-- })
+
+-- Per-app touchpad scroll speeds.
+-- o.window("(Alacritty|kitty|foot)", { scroll_touchpad = 1.5 })
+-- o.window("com.mitchellh.ghostty", { scroll_touchpad = 0.2 })
+
+-- Touchpad gestures for workspaces and focus.
+-- hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
+-- hl.gesture({ fingers = 3, direction = "left", action = function() hl.dispatch(hl.dsp.focus({ direction = "l" })) end })
+-- hl.gesture({ fingers = 3, direction = "right", action = function() hl.dispatch(hl.dsp.focus({ direction = "r" })) end })

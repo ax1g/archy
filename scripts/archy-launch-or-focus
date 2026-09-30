@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# archy:launch-or-focus -- run a command, or focus an existing window matching a
+# class regex instead of opening a duplicate.
+#
+# Usage: archy-launch-or-focus <class-regex> <command>
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+match="${1:-}"
+command="${2:-}"
+[[ -n $command ]] || exit 1
+
+if existing="$(hyprctl -j clients 2>/dev/null | jq -r --arg re "$match" '
+  .[] | select(.class | test($re)) | .address' | head -n1)" && [[ -n $existing ]]; then
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$existing\" })" >/dev/null 2>&1
+  exit 0
+fi
+
+setsid -f bash -lc "$command" >/dev/null 2>&1

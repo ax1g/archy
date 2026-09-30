@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# archy:window-switcher -- wofi list of open windows, jump to one on Enter.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+# Flattened to "address<TAB>label" lines. The label is workspace number, then
+# class, then title, so a list of browser windows is still distinguishable.
+list="$(hyprctl -j clients 2>/dev/null | jq -r '
+  [ .[] | { address, class, title, ws: .workspace.id, focused } ]
+  | sort_by(.ws) | .[]
+  | "\(.address)\t\(.ws)  \(.class) — \(.title)"')"
+
+[[ -n $list ]] || exit 0
+
+chosen="$(printf '%s\n' "$list" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Window" \
+  --insensitive \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+addr="$(printf '%s' "$chosen" | cut -f1)"
+[[ -n $addr ]] || exit 0
+
+hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" >/dev/null 2>&1

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# archy:emoji -- searchable emoji picker in wofi.
+#
+# Searches by unicode name ("thumbs up", "rocket", "snake") or by the character
+# itself, and types the selection into whatever is focused with wtype.
+#
+# Usage: archy-emoji
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+LIST="$ARCHY_HOME/data/emoji.txt"
+
+if [[ ! -r $LIST ]]; then
+  notify "Emoji list missing at $LIST" critical
+  exit 1
+fi
+
+command -v wtype >/dev/null 2>&1 || {
+  notify "wtype is needed to type the emoji" critical
+  exit 1
+}
+
+# Only the entries, without the header comments, and with the name lowercased so
+# a search for "thumbs" matches "Thumbs Up".
+entries="$(grep -v '^#' "$LIST" | awk -F'\t' 'NF==2 { print $1 "\t" tolower($2) }')"
+
+[[ -n $entries ]] || {
+  notify "Emoji list is empty" critical
+  exit 1
+}
+
+chosen="$(printf '%s\n' "$entries" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Emoji" \
+  --insensitive \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+emoji="$(printf '%s' "$chosen" | cut -f1)"
+[[ -n $emoji ]] || exit 0
+
+# Type it. No delay and no key event: wtype -- simulates the text at the seat
+# level, which is what a native Wayland client expects to receive.
+wtype -- "$emoji"
+
+# Nothing else to do. The picker stays open if focus returns to it, so a
+# second search is one key away; closing it is the user's call.

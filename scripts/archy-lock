@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# archy:lock -- lock the session.
+#
+# hyprlock rather than swaylock: same role, but it draws inside the compositor's
+# own frost and rounding, which is what the rest of the look is built around.
+#
+# Usage: archy-lock
+#
+# This is what hypridle calls. It is also safe to run while a lock is already
+# up, in which case it tears it down.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+QML="$ARCHY_GENERATED/hyprlock.qml"
+
+# Cycle DPMS off then on before the surface appears.
+#
+# This is the one ordering that matters here. A DPMS transition taken while a
+# lock surface is up destroys every wl_output the compositor has, and Hyprland
+# does not come back from that: it logs "no outputs, creating placeholder
+# screen", then dies with EGL_BAD_MATCH on the next eglSwapBuffers. Blank first,
+# let the compositor settle, then put the surface up onto a dark screen.
+#
+# Fail with a lock anyway if blanking does not settle, rather than leaving the
+# session unlocked because a cosmetic step failed.
+if pgrep -x hyprlock >/dev/null 2>&1; then
+  pkill -x hyprlock
+  exit 0
+fi
+
+hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' >/dev/null 2>&1
+sleep 0.4
+hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1
+sleep 0.2
+
+if [[ -r $QML ]]; then
+  exec hyprlock -q "$QML"
+else
+  # No generated QML means archy-theme has not run. Fall back to the built-in
+  # surface rather than not locking at all.
+  exec hyprlock
+fi

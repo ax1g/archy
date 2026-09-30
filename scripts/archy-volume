@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# archy:volume -- adjust output volume, up to 200%
+#
+# Usage: archy-volume <raise|lower|mute-toggle|+N|-N>
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+action="${1:-}"
+if [[ -z $action ]]; then
+  echo "Usage: archy-volume <raise|lower|mute-toggle|+N|-N>" >&2
+  exit 1
+fi
+
+sink="$(audio_sink)" || {
+  notify "No audio sink found" critical
+  exit 1
+}
+
+volume_percent() {
+  pactl get-sink-volume "$sink" 2>/dev/null |
+    awk 'NR == 1 {
+      for (i = 1; i <= NF; i++)
+        if ($i ~ /%$/) { sub("%", "", $i); print $i; exit }
+    }'
+}
+
+volume_muted() {
+  [[ $(pactl get-sink-mute "$sink" 2>/dev/null) == *yes ]]
+}
+
+case "$action" in
+raise) action="+5" ;;
+lower) action="-5" ;;
+esac
+
+if [[ $action == "mute-toggle" ]]; then
+  # A key repeat storm would otherwise toggle twice and land back where it
+  # started, so rate-limit to one toggle per 250ms.
+  debounce_file="$ARCHY_STATE_DIR/volume-mute.last"
+  now=$(date +%s%3N)
+  last=0
+  [[ -r $debounce_file ]] && read -r last <"$debounce_file"
+  if ((now - ${last:-0} < 250)); then
+    exit 0
+  fi
+  printf '%s\n' "$now" >"$debounce_file"
+
+  pactl set-sink-mute "$sink" toggle
+elif [[ $action =~ ^([+-])([0-9]+)$ ]]; then
+  direction="${BASH_REMATCH[1]}"
+  step="${BASH_REMATCH[2]}"
+
+  current="$(volume_percent)"
+  if [[ -z $current ]]; then
+    notify "Could not read volume for $sink" critical
+    exit 1
+  fi
+
+  if [[ $direction == "+" ]]; then
+    next=$((current + step))
+    ((next <= 200)) || next=200
+  else
+    next=$((current - step))
+    ((next >= 0)) || next=0
+  fi
+
+  # Nudging the volume up should also clear a mute: the key press is the user
+  # saying "louder", and staying silent reads as a broken key.
+  pactl set-sink-mute "$sink" 0
+  pactl set-sink-volume "$sink" "${next}%"
+elif [[ $action == "mic-mute-toggle" ]]; then
+  source_name="$(pactl get-default-source 2>/dev/null)"
+  if [[ -z $source_name ]]; then
+    notify "No audio input found" critical
+    exit 1
+  fi
+  # Read into a variable first: piping pactl into grep -q under pipefail returns
+  # failure on a SIGPIPE kill, not on the actual answer.
+  mute_state="$(pactl get-source-mute "$source_name" 2>/dev/null)"
+  if [[ $mute_state == *yes* ]]; then
+    pactl set-source-mute "$source_name" 0
+    notify "Microphone on" low
+  else
+    pactl set-source-mute "$source_name" 1
+    notify "Microphone muted" normal
+  fi
+  exit 0
+else
+  echo "Unknown volume action: $action" >&2
+  exit 1
+fi
+
+percent="$(volume_percent)"
+if volume_muted || ((${percent:-0} == 0)); then
+  icon="audio-volume-muted"
+else
+  icon="audio-volume-high"
+fi
+notify "$icon  ${percent:-0}%"
+printf '%s\n' "${percent:-0}"

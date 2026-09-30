@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# archy:keybindings-menu -- searchable list of the live keybindings.
+#
+# Reads the running config out of hyprctl rather than parsing the config files,
+# so what it lists is what Hyprland actually has, including anything a package
+# update changed. Lock-screen bindings are excluded: they are unreachable from
+# an unlocked session and would be noise in a list meant for reference.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+# hyprctl reports keys in the xkb names Hyprland stores ("code:20" for the 1
+# key), which are unreadable in a menu. Map the common ones to labels.
+pretty_key() {
+  local key="$1"
+  case "$key" in
+  code:20) key="1" ;;
+  code:21) key="2" ;;
+  code:22) key="3" ;;
+  code:23) key="4" ;;
+  code:24) key="5" ;;
+  code:25) key="6" ;;
+  code:26) key="7" ;;
+  code:27) key="8" ;;
+  code:28) key="9" ;;
+  code:29) key="0" ;;
+  code:34) key="PageDown" ;;
+  code:35) key="PageUp" ;;
+  mouse:272) key="LMB" ;;
+  mouse:273) key="RMB" ;;
+  mouse_down) key="WheelDown" ;;
+  mouse_up) key="WheelUp" ;;
+  esac
+  printf '%s' "$key"
+}
+
+# The modifier bit values are Hyprland's, not self-documenting, so they are
+# named once here rather than as bare hex in the loop below.
+raw="$(hyprctl -j binds 2>/dev/null | jq -r '
+  .[]
+  | select(.locked == false)
+  | select(.description != null and .description != "")
+  | "\(.modmask)\t\(.key)\t\(.description)"')"
+
+if [[ -z $raw ]]; then
+  notify "No keybindings to show" normal
+  exit 1
+fi
+
+rendered="$(
+  while IFS=$'\t' read -r mask key description; do
+    [[ -n $mask ]] || continue
+    mods=""
+    ((mask & 64)) && mods+="SUPER "
+    ((mask & 128)) && mods+="SHIFT "
+    ((mask & 256)) && mods+="ALT "
+    ((mask & 512)) && mods+="CTRL "
+    printf '%s + %s\t%s\n' "${mods% }" "$(pretty_key "$key")" "$description"
+  done <<<"$raw"
+)"
+
+printf '%s\n' "$rendered" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Keybindings" \
+  --hide-input \
+  - >/dev/null

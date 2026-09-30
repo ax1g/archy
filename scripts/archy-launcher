@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# archy:launcher -- the wofi app launcher.
+#
+# Shows .desktop entries, plus a handful of direct commands that have no entry
+# worth clicking through a menu for.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+# Deselect on both Enter and Escape only; typing always filters.
+wofi_run() {
+  wofi --show drun \
+    --config "$ARCHY_HOME/wofi/config.rasi" \
+    --style "$ARCHY_GENERATED/wofi.css" \
+    --insensitive \
+    --prompt "$1" \
+    -- "$@"
+}
+
+choice="$(wofi_run "Launch")"
+[[ -n $choice ]] || exit 0
+
+# wofi --show drun prints the Exec line of the entry it matched, so a desktop
+# file's own handling of %U and friends has already happened by this point.
+setsid -f bash -lc "$choice" >/dev/null 2>&1

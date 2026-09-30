@@ -1,0 +1,176 @@
+-- Small helper layer over Hyprland's native Lua API.
+--
+-- Omarchy ships an `o.*` namespace of its own. This file is the standalone
+-- replacement: same call shapes, no external packages, nothing that reaches
+-- into /usr/share/omarchy. Only `hl.*` (stock, Hyprland 0.56) is used.
+
+o = o or {}
+
+local home = os.getenv("HOME") or "/home/agx"
+local bin_dir = os.getenv("ARCHY_BIN_DIR") or (home .. "/.local/bin")
+local state_dir = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
+
+o.home = home
+o.bin_dir = bin_dir
+o.state_dir = state_dir
+
+local function shell_quote(value)
+  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+o.shell_quote = shell_quote
+
+local function file_exists(path)
+  local file = io.open(path, "r")
+  if file then
+    file:close()
+    return true
+  end
+  return false
+end
+
+o.file_exists = file_exists
+
+-- Hyprland reaps its own children, so os.execute() cannot return an exit
+-- status from inside the compositor. Read a marker off stdout instead.
+function o.shell_succeeds(command)
+  local pipe = io.popen("( " .. command .. " ) >/dev/null 2>&1 && echo OK")
+  if not pipe then
+    return false
+  end
+  local output = pipe:read("*a") or ""
+  pipe:close()
+  return output:find("OK", 1, true) ~= nil
+end
+
+function o.cmd_present(command)
+  if command:find("/", 1, true) then
+    return file_exists(command)
+  end
+  local path = os.getenv("PATH") or "/usr/local/bin:/usr/bin"
+  for directory in (path .. ":"):gmatch("([^:]*):") do
+    if file_exists((directory ~= "" and directory or ".") .. "/" .. command) then
+      return true
+    end
+  end
+  return false
+end
+
+function o.cmd_missing(command)
+  return not o.cmd_present(command)
+end
+
+-- Absolute path to one of our own scripts. Absolute, not bare, so the PATH a
+-- keybind dispatcher runs under can never resolve to a different binary.
+function o.script(name)
+  return bin_dir .. "/archy-" .. name
+end
+
+function o.notify(message)
+  return "notify-send -u low " .. shell_quote(message)
+end
+
+-- Build a dispatcher out of a table shorthand, so bindings.lua can stay
+-- declarative. Supported keys: launch, tui, focus, web.
+--
+-- A table is only treated as a shorthand if it actually carries one of those
+-- keys. Anything else is passed through untouched, which is what a dispatcher
+-- built by hl.dsp.* is — and which is not reliably a plain table, so testing
+-- for a key is the only safe discriminator.
+local SHORTHAND_KEYS = { launch = true, tui = true, web = true, focus = true }
+
+local function is_shorthand(value)
+  if type(value) ~= "table" then
+    return false
+  end
+  for key in pairs(SHORTHAND_KEYS) do
+    if value[key] ~= nil then
+      return true
+    end
+  end
+  return false
+end
+
+local function command_from(value, description)
+  if not is_shorthand(value) then
+    return value
+  end
+
+  if value.tui then
+    return o.script("launch-tui") .. " " .. shell_quote(value.tui)
+  elseif value.web then
+    local launch = "zen-browser --new-window " .. shell_quote(value.web)
+    if value.focus then
+      return o.script("launch-or-focus") .. " " .. shell_quote("^zen$") .. " " .. shell_quote(launch)
+    end
+    return launch
+  elseif value.focus and value.launch then
+    return o.script("launch-or-focus")
+      .. " "
+      .. shell_quote(value.focus)
+      .. " "
+      .. shell_quote(o.launch(value.launch))
+  elseif value.launch then
+    return o.launch(value.launch)
+  end
+
+  error("archy: unsupported bind target for " .. tostring(description))
+end
+
+-- No uwsm wrapper. Omarchy launched apps through universal-workspace-manager
+-- for systemd scope isolation; standalone Hyprland does not need it, and
+-- dropping it removes the uwsm dependency entirely.
+function o.launch(command)
+  return "setsid " .. command
+end
+
+function o.launch_sole(match, command)
+  return o.script("launch-or-focus") .. " " .. shell_quote(match) .. " " .. shell_quote(command)
+end
+
+function o.bind(keys, description, dispatcher, options)
+  local opts = options or {}
+  if description then
+    opts.description = description
+  end
+
+  dispatcher = command_from(dispatcher, description)
+
+  if type(dispatcher) == "string" then
+    dispatcher = hl.dsp.exec_cmd(dispatcher)
+  end
+
+  hl.bind(keys, dispatcher, opts)
+end
+
+function o.bind_toggle(keys, description, toggle, options)
+  o.bind(keys, description, o.script("toggle") .. " " .. shell_quote(toggle), options)
+end
+
+function o.exec_on_start(command)
+  hl.on("hyprland.start", function()
+    hl.exec_cmd(command)
+  end)
+end
+
+function o.launch_on_start(command)
+  o.exec_on_start(command)
+end
+
+-- Normalize a match shorthand into hl.window_rule's expected shape, so callers
+-- can pass either a bare class string or a match table.
+function o.window(match, rules)
+  rules.match = rules.match or {}
+
+  if type(match) == "string" then
+    rules.match.class = match
+  else
+    for key, value in pairs(match) do
+      rules.match[key] = value
+    end
+  end
+
+  hl.window_rule(rules)
+end
+
+return o

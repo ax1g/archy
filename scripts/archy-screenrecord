@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# archy:screenrecord -- toggle a screen recording.
+#
+# Uses gpu-screen-recorder, which reads the compositor's output directly, so the
+# recording is not a screen capture of the screen and does not pick up its own
+# overlay.
+#
+# Usage: archy-screenrecord <start|stop|toggle>
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+RECORD_DIR="${ARCHY_RECORD_DIR:-$HOME/Pictures/recordings}"
+mkdir -p "$RECORD_DIR" 2>/dev/null
+
+is_recording() {
+  pgrep -f "gpu-screen-recorder" >/dev/null 2>&1
+}
+
+start() {
+  is_recording && return 0
+
+  stamp="$(date +%Y-%m-%d_%H-%M-%S)"
+  output="$RECORD_DIR/recording_$stamp.mp4"
+
+  # The region picker is suppressed (-r region would wait on slurp); a plain
+  # full-output capture is what a toggle key should do.
+  setsid -f gpu-screen-recorder -o "$output" -f 60 -k on >/dev/null 2>&1
+  printf '%s' "$output" >"$ARCHY_STATE_DIR/recording"
+  notify "Recording  $(basename "$output")" normal
+}
+
+stop() {
+  is_recording || return 0
+  # SIGINT is how gpu-screen-recorder finalizes the container and writes the
+  # moov atom. SIGTERM leaves an unplayable file behind.
+  pkill -INT -f "gpu-screen-recorder" >/dev/null 2>&1
+  sleep 1
+  notify "Recording saved  $(basename "$(cat "$ARCHY_STATE_DIR/recording" 2>/dev/null)")" low
+  rm -f "$ARCHY_STATE_DIR/recording"
+}
+
+case "${1:-toggle}" in
+start) start ;;
+stop) stop ;;
+toggle)
+  if is_recording; then
+    stop
+  else
+    start
+  fi
+  ;;
+*)
+  echo "Usage: archy-screenrecord <start|stop|toggle>" >&2
+  exit 1
+  ;;
+esac

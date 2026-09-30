@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# archy:media -- MPRIS media keys.
+#
+# Usage: archy-media <play-pause|next|previous|stop>
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+action="${1:-play-pause}"
+
+command -v playerctl >/dev/null 2>&1 || exit 0
+
+# Fail quietly: a media key with nothing playing should do nothing at all, not
+# show an error or pop a notification.
+playerctl "$action" >/dev/null 2>&1 || exit 0

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# archy:workspace-layout-toggle -- switch the active workspace between dwindle
+# and scrolling layout.
+#
+# Per-workspace, and remembered for the session. Scrolling is the niri-like
+# side-scrolling behavior: new windows push in from the right and old ones
+# slide off, rather than everything sharing one screen and resizing.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+current="$(hyprctl -j getoption layout:layout 2>/dev/null | jq -r '.int')"
+ws="$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id')"
+
+case "$current" in
+0) next="scrolling" ;;
+1) next="dwindle" ;;
+*) next="dwindle" ;;
+esac
+
+# A workspace keyword applies immediately; no reload needed. Reloading here
+# would re-run the whole Lua config, which restarts the cascade's sibling
+# counting and every autostart hook.
+hyprctl keyword "workspace $ws, layout:$next" >/dev/null 2>&1
+
+notify "Layout  $next" low

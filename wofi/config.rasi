@@ -1,0 +1,55 @@
+// archy: Wofi configuration — layout only.
+//
+// Colors are NOT here. They live in colors/colors.conf and reach Wofi through
+// generated/wofi.css, passed with --style. Wofi parses its --config and
+// --style files separately, so an @define-color declared in one is not visible
+// in the other: anything colored belongs in the generated stylesheet, and
+// anything here is layout.
+//
+// Every archy-* script that opens Wofi passes both files.
+
+* {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+}
+
+window {
+  width: 620px;
+  // Tall enough for the launcher to be a real list rather than a scrolling
+  // hint, short enough to leave the workspace visible behind it.
+  height: 460px;
+  // Centered: a launcher that drops in from the top edge reads as a
+  // notification, and one anchored to a corner has to be hunted for.
+  location: center;
+  border-radius: 8px;
+}
+
+#input {
+  font-size: 18px;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 8px;
+  // Square off the bottom corners: a rounded input inside a rounded window
+  // leaves a visible notch where they meet.
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+#entry {
+  placeholder: "Type to filter…";
+}
+
+#listview {
+  margin: 0 8px 8px 8px;
+}
+
+.item {
+  padding: 8px 10px;
+  spacing: 10px;
+}
+
+.selected {
+  // Padding is reduced by 3px because the generated stylesheet puts a 3px
+  // left border here. Without that the text would shift right on selection,
+  // which reads as a jump rather than a highlight.
+  padding-left: 7px;
+}

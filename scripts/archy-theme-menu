@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# archy:theme-menu -- pick a theme from colors/themes/ and apply it.
+#
+# Themes are plain copies of colors/colors.conf with a different name. Copying
+# the file rather than symlinking it is deliberate: once a theme is live it
+# usually gets tweaked, and a symlink would write those tweaks into the theme
+# source.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+THEMES_DIR="$ARCHY_HOME/colors/themes"
+mkdir -p "$THEMES_DIR"
+
+current="$(color name)"
+
+if [[ ! -d $THEMES_DIR ]] || [[ -z $(ls -A "$THEMES_DIR"/*.conf 2>/dev/null) ]]; then
+  notify "No themes in colors/themes/ yet" normal
+  exit 1
+fi
+
+entries="$(for f in "$THEMES_DIR"/*.conf; do
+  [[ -r $f ]] || continue
+  name="$(basename "$f" .conf)"
+  if [[ $name == "$current" ]]; then
+    printf '%s (active)\t%s\n' "$name" "$f"
+  else
+    printf '%s\t%s\n' "$name" "$f"
+  fi
+done)"
+
+chosen="$(printf '%s\n' "$entries" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Theme" \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+source_file="$(printf '%s' "$chosen" | cut -f2)"
+[[ -r $source_file ]] || exit 1
+
+# Back up what is live, so a theme switch is reversible without git.
+[[ -r $ARCHY_COLORS ]] && cp "$ARCHY_COLORS" "$ARCHY_COLORS.bak"
+
+cp "$source_file" "$ARCHY_COLORS"
+
+"$ARCHY_BIN_DIR/archy-theme" apply

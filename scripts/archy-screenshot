@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# archy:screenshot -- capture the screen or a region with grim and slurp.
+#
+# Usage: archy-screenshot <fullscreen|region> [--screen | --window | --cycle DIR]
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+mode="${1:-fullscreen}"
+shift || true
+
+timestamp() {
+  date +%Y-%m-%d_%H-%M-%S
+}
+
+# The geometry of the focused monitor, in the "WxH+X+Y" form grim wants.
+focused_monitor_geometry() {
+  hyprctl -j monitors 2>/dev/null |
+    jq -r '.[] | select(.focused == true) | "\(.width)x\(.height)@\(.x),\(.y)"'
+}
+
+# Match the area under the cursor to a window. Used by the region picker's
+# RETURN key, where slurp has already drawn the selection and the highlighted
+# window is the one containing the pointer.
+window_under_cursor() {
+  local pos addr
+  pos="$(hyprctl -j cursorpos 2>/dev/null)" || return 1
+  local px py
+  px="$(printf '%s' "$pos" | jq -r '.x')"
+  py="$(printf '%s' "$pos" | jq -r '.y')"
+
+  addr="$(hyprctl -j clients 2>/dev/null | jq -r --argjson px "$px" --argjson py "$py" '
+    [ .[]
+      | select(.at[0] <= $px and $px < (.at[0] + .size[0]))
+      | select(.at[1] <= $py and $py < (.at[1] + .size[1]))
+    ]
+    # Largest match wins: a dialog inside a browser window contains the same
+    # point as the browser, and the dialog is what the user pointed at.
+    | sort_by(-(.size[0] * .size[1]))
+    | .[0].address // empty')"
+  [[ -n $addr ]] || return 1
+  printf '%s' "$addr"
+}
+
+geometry_of_address() {
+  hyprctl -j clients 2>/dev/null |
+    jq -r --arg addr "$1" '.[] | select(.address == $addr)
+      | "\(.size[0])x\(.size[1])@\(.at[0]),\(.at[1])"'
+}
+
+# Cycle the region picker's highlight between windows, in the given direction.
+cycle_window() {
+  local dir="${1:-next}"
+  local pos px py
+  pos="$(hyprctl -j cursorpos 2>/dev/null)" || return 1
+  px="$(printf '%s' "$pos" | jq -r '.x')"
+  py="$(printf '%s' "$pos" | jq -r '.y')"
+
+  # Ordered by address, so "next" and "previous" are stable rather than
+  # dependent on the order hyprctl happened to print.
+  local target
+  target="$(hyprctl -j clients 2>/dev/null | jq -r --argjson px "$px" --argjson py "$py" --arg dir "$dir" '
+    def center: [ (.at[0] + (.size[0] / 2)), (.at[1] + (.size[1] / 2)) ];
+    [ .[] | { address, size, at } ]
+    | sort_by(.address)
+    | . as $all
+    | ($all
+        | map(select(
+            (.at[0] <= ($px)) and ($px < (.at[0] + .size[0]))
+            and (.at[1] <= ($py)) and ($py < (.at[1] + .size[1]))))
+        | .[0].address // empty) as $cur
+    | if ($cur | length) == 0 then $all[0].address
+      else
+        ($all | map(.address) | index($cur)) as $i
+        | if $dir == "next" then $all[(($i + 1) % ($all | length))].address
+          elif $dir == "prev" then $all[(($i - 1 + ($all | length)) % ($all | length))].address
+          else $cur
+          end
+      end')"
+
+  [[ -n $target ]] || return 1
+
+  # Move the pointer to the chosen window's center, so the highlight the user
+  # sees follows the selection.
+  local cx cy
+  read -r cx cy <<<"$(hyprctl -j clients 2>/dev/null |
+    jq -r --arg addr "$target" '.[] | select(.address == $addr)
+      | "\((.at[0] + (.size[0] / 2)) | floor) \((.at[1] + (.size[1] / 2)) | floor)')"
+  [[ -n ${cx:-} ]] && hyprctl dispatch "hl.dsp.cursor.move({ x = $cx, y = $cy })" >/dev/null 2>&1
+}
+
+# Copy the last capture to the clipboard as well as saving it, which is what
+# makes a screenshot immediately pasteable into a chat window.
+save_and_copy() {
+  local file="$ARCHY_SHOTS_DIR/screenshot_$(timestamp).png"
+  cp "$1" "$file"
+  wl-copy --type image/png <"$file" 2>/dev/null || true
+  printf '%s\n' "$file"
+}
+
+capture_geometry() {
+  local geometry="$1"
+  local tmp
+  tmp="$(mktemp --suffix=.png)"
+
+  if ! grim -g "$geometry" "$tmp" 2>/dev/null; then
+    # grim refuses a geometry that lies entirely outside the visible work area,
+    # which happens when the picker's highlight is on a hidden layer.
+    rm -f "$tmp"
+    return 1
+  fi
+  save_and_copy "$tmp"
+  rm -f "$tmp"
+}
+
+case "$mode" in
+fullscreen)
+  geometry="$(focused_monitor_geometry)" || exit 1
+  result="$(capture_geometry "$geometry")" || {
+    notify "Screenshot failed" critical
+    exit 1
+  }
+  notify "Screenshot saved  $(basename "$result")" low
+  ;;
+
+region)
+  # The picker binds in bindings.lua are live exactly as long as a slurp
+  # selection layer is up, and they pass the mode they want here. slurp owns
+  # the geometry in both cases.
+  region_override=""
+  case "${1:-}" in
+  --screen)
+    region_override="fullscreen"
+    ;;
+  --window)
+    if addr="$(window_under_cursor)"; then
+      if geom="$(geometry_of_address "$addr")"; then
+        region_override="$geom"
+      fi
+    fi
+    ;;
+  --cycle)
+    cycle_window "${2:-next}"
+    exit 0
+    ;;
+  esac
+
+  if [[ -n $region_override ]]; then
+    if [[ $region_override == "fullscreen" ]]; then
+      geometry="$(focused_monitor_geometry)" || exit 1
+    else
+      geometry="$region_override"
+    fi
+    result="$(capture_geometry "$geometry")" || {
+      notify "Screenshot failed" critical
+      exit 1
+    }
+    notify "Screenshot saved  $(basename "$result")" low
+    exit 0
+  fi
+
+  # No override: this is the plain region grab. slurp exits non-zero on cancel,
+  # which must stay silent rather than reporting a failure.
+  if region="$(slurp -p -f png -o - 2>/dev/null)" && [[ -n $region ]]; then
+    printf '%s' "$region" | base64 -d >"$ARCHY_CACHE_DIR/region.png" 2>/dev/null
+    result="$(save_and_copy "$ARCHY_CACHE_DIR/region.png")"
+    rm -f "$ARCHY_CACHE_DIR/region.png"
+    notify "Screenshot saved  $(basename "$result")" low
+  fi
+  ;;
+
+*)
+  echo "Usage: archy-screenshot <fullscreen|region>" >&2
+  exit 1
+  ;;
+esac

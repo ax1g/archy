@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# archy:nightlight-toggle -- switch hyprsunset between identity and its warm
+# profile.
+#
+# hyprsunset is configured in hyprsunset.conf. The identity profile there is the
+# neutral daytime state; this swaps in the warm one on demand.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+CONF="$ARCHY_HOME/hyprsunset.conf"
+STATE_FILE="$ARCHY_STATE_DIR/nightlight"
+
+pgrep -x hyprsunset >/dev/null || setsid -f hyprsunset >/dev/null 2>&1 &
+sleep 0.2
+
+if hyprctl hyprsunset identity >/dev/null 2>&1; then
+  state="$(cat "$STATE_FILE" 2>/dev/null || echo on)"
+  if [[ $state == "on" ]]; then
+    # Restore the warm profile that the toggle turned off.
+    hyprctl hyprsunset commit >/dev/null 2>&1
+    printf 'off' >"$STATE_FILE"
+    notify "Nightlight off" low
+  else
+    hyprctl hyprsunset identity >/dev/null 2>&1
+    printf 'on' >"$STATE_FILE"
+    notify "Nightlight on" low
+  fi
+fi

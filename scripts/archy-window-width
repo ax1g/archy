@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# archy:window-width -- remember a window's width and restore it later.
+#
+# Usage: archy-window-width <save|restore>
+#
+# Restoring by ratio, not pixels: the saved value is the window's share of the
+# work area, so it survives a resolution or scale change.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+STATE_FILE="$ARCHY_STATE_DIR/window-width-ratios"
+touch "$STATE_FILE" 2>/dev/null
+
+action="${1:-}"
+[[ -n $action ]] || {
+  echo "Usage: archy-window-width <save|restore>" >&2
+  exit 1
+}
+
+window="$(active_address)" || exit 0
+addr="${window#address:}"
+
+# Work area of the focused monitor in logical pixels, less the outer gaps that
+# the layout always reserves.
+usable_width() {
+  hyprctl -j monitors 2>/dev/null | jq -r '
+    .[] | select(.focused == true)
+    | ((.width / .scale) - .reserved.left - .reserved.right - 16) | floor'
+}
+
+# Height is left alone, so a window restores to the same width without also
+# snapping its height back to a stale value.
+current_height() {
+  hyprctl -j activewindow 2>/dev/null | jq -r '.size[1] // 0'
+}
+
+case "$action" in
+save)
+  width="$(hyprctl -j activewindow 2>/dev/null | jq -r '.size[0] // empty')"
+  usable="$(usable_width)"
+  [[ -n $width && -n $usable ]] || exit 1
+  ((usable > 0)) || exit 1
+
+  ratio="$(awk -v w="$width" -v u="$usable" 'BEGIN { printf "%.4f", w / u }')"
+
+  # Keyed on address, not class: two windows of the same class keep separate
+  # widths, which is what "save this width, go look at something else, come
+  # back" actually needs.
+  tmp="$STATE_FILE.tmp"
+  grep -v "^$addr"$'\t' "$STATE_FILE" >"$tmp" 2>/dev/null || true
+  printf '%s\t%s\n' "$addr" "$ratio" >>"$tmp"
+  mv "$tmp" "$STATE_FILE"
+  notify "Width saved  ${width}px" low
+  ;;
+
+restore)
+  ratio="$(grep "^$addr"$'\t' "$STATE_FILE" 2>/dev/null | tail -n1 | cut -f2)"
+  [[ -n $ratio ]] || exit 1
+
+  usable="$(usable_width)"
+  [[ -n $usable ]] || exit 1
+
+  width="$(awk -v r="$ratio" -v u="$usable" 'BEGIN { printf "%d", r * u }')"
+  ((width > 0)) || exit 1
+
+  hypr_dispatch \
+    "hl.dsp.window.resize({ window = \"$window\", x = $width, y = $(current_height) })" \
+    resizeactive exact "$width" "$(current_height)" "$window"
+  ;;
+
+*)
+  echo "Unknown action: $action" >&2
+  exit 1
+  ;;
+esac

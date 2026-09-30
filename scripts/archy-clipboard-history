@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# archy:clipboard-history -- wofi over the cliphist store.
+#
+# Enter copies the selected entry back to the clipboard and closes. Anything
+# else treats the selection as a search term.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+pgrep -f "cliphist (store|load)" >/dev/null 2>&1 || {
+  notify "cliphist is not running" normal
+  exit 1
+}
+
+chosen="$(cliphist list | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Clipboard" \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+printf '%s' "$chosen" | cliphist load
+notify "Copied to clipboard" low
