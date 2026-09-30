@@ -62,6 +62,10 @@ hl.on("hyprland.start", function()
   -- Removable media.
   hl.exec_cmd("udiskie --automount --no-notify --no-tray")
 
+  -- Wallpaper. Runs after the bar, because the bar has no background of its own
+  -- and needs the wallpaper behind it before it can be judged.
+  hl.exec_cmd("sleep 0.5 && " .. bin .. "/archy-wallpaper set")
+
   -- Restore the last gamma brightness, which is compositor state and does not
   -- survive a compositor restart on its own.
   hl.exec_cmd(bin .. "/archy-brightness restore")

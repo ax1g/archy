@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# archy:bluetooth-menu -- pair, connect and disconnect from the bar.
+#
+# bluetoothctl is the tool bluetooth-mesh-independent: it talks to bluez
+# directly, so there is no daemon to be running for this to work.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+command -v bluetoothctl >/dev/null 2>&1 || {
+  notify "bluetoothctl not available" normal
+  exit 1
+}
+
+# The radio itself, then each known device.
+powered="$(bluetoothctl show 2>/dev/null | awk -F': ' '/Powered/{print $2}')"
+
+menu=""
+
+if [[ $powered == "no" ]]; then
+  menu+="Turn on bluetooth"$'\t'"bluetoothctl power on"
+else
+  menu+="Turn off bluetooth"$'\t'"bluetoothctl power off"
+fi
+
+# Paired devices, with the connected ones marked.
+while IFS= read -r line; do
+  mac="$(printf '%s' "$line" | awk '{print $2}')"
+  name="$(printf '%s' "$line" | sed -E 's/^Device ([0-9A-F:]+) (.*)$/\2/')"
+  connected="$(bluetoothctl info "$mac" 2>/dev/null | awk -F': ' '/Connected/{print $2}')"
+  short="$(printf '%s' "$mac" | cut -c8-11)"
+
+  if [[ $connected == "yes" ]]; then
+    menu+="● ${name} [${short}]"$'\t'"bluetoothctl disconnect ${mac}"
+  else
+    menu+="  ${name} [${short}]"$'\t'"bluetoothctl connect ${mac}"
+  fi
+done < <(bluetoothctl devices Paired 2>/dev/null)
+
+chosen="$(printf '%s' "$menu" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Bluetooth" \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+action="$(printf '%s' "$chosen" | cut -f2)"
+[[ -n $action ]] || exit 0
+
+eval "$action" >/dev/null 2>&1

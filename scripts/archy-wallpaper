@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# archy:wallpaper -- set the desktop background, with a crossfade.
+#
+# swww reads the compositor's output directly, so a wallpaper is a real image on
+# the root window rather than a full-screen window someone has to keep behind
+# everything.
+#
+# Usage:
+#   archy-wallpaper set [file]     set one, or the default
+#   archy-wallpaper show           print the current file
+#   archy-wallpaper list           list what is available
+#   archy-wallpaper next           pick one in wofi and set it
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+WALLPAPER_DIR="$ARCHY_HOME/wallpapers"
+DEFAULT_WALLPAPER="$WALLPAPER_DIR/totoro.png"
+STATE_FILE="$ARCHY_STATE_DIR/wallpaper"
+
+mkdir -p "$WALLPAPER_DIR" 2>/dev/null
+
+# swww is a client of swww-daemon, and the daemon has to be up before a
+# transition will do anything. Starting it per call is cheap: it exits on its own
+# if nothing is using it.
+ensure_daemon() {
+  pgrep -x swww-daemon >/dev/null 2>&1 && return 0
+  command -v swww >/dev/null 2>&1 || return 1
+  setsid -f swww-daemon >/dev/null 2>&1
+  # The daemon needs a moment before it answers, and asking sooner returns
+  # nothing and silently leaves the wallpaper unset.
+  sleep 0.3
+  return 0
+}
+
+set_wallpaper() {
+  local file="$1"
+
+  if [[ ! -r $file ]]; then
+    notify "No such wallpaper: $file" critical
+    return 1
+  fi
+
+  if ! ensure_daemon; then
+    notify "swww is not installed, cannot set the wallpaper" critical
+    return 1
+  fi
+
+  # The default wallpaper is authored at the panel's own 1920x1080, so it needs
+  # no scaling at all. crop is here for any other image dropped in the folder,
+  # which will not match: fill would stretch it and letterbox would leave bars.
+  #
+  # The transition is not decoration. The desktop was frosted-over a moment ago
+  # and is now opaque, and a cut leaves that redraw visible for a frame.
+  swww img "$file" \
+    --fill-type crop \
+    --resize-type crop \
+    --transition-type any \
+    --transition-fps 60 \
+    --transition-duration 0.6 >/dev/null 2>&1
+
+  printf '%s' "$file" >"$STATE_FILE"
+  return 0
+}
+
+case "${1:-set}" in
+set)
+  target="${2:-$DEFAULT_WALLPAPER}"
+  set_wallpaper "$target"
+  ;;
+
+show)
+  current="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  if [[ -z $current ]]; then
+    printf '%s\n' "$DEFAULT_WALLPAPER"
+  else
+    printf '%s\n' "$current"
+  fi
+  ;;
+
+list)
+  found=0
+  for f in "$WALLPAPER_DIR"/*.{jpg,jpeg,png,webp}; do
+    [[ -r $f ]] || continue
+    printf '%s\n' "$(basename "$f")"
+    found=1
+  done
+  ((found)) || notify "No wallpapers in $WALLPAPER_DIR" normal
+  ;;
+
+next)
+  shopt -s nullglob
+  files=("$WALLPAPER_DIR"/*.{jpg,jpeg,png,webp})
+  shopt -u nullglob
+  ((${#files[@]})) || {
+    notify "No wallpapers in $WALLPAPER_DIR" normal
+    exit 1
+  }
+
+  current="$(cat "$STATE_FILE" 2>/dev/null || true)"
+  entries=""
+  for f in "${files[@]}"; do
+    name="$(basename "$f")"
+    if [[ $current == "$f" ]]; then
+      entries+="● ${name}"$'\t'"$f"$'\n'
+    else
+      entries+="  ${name}"$'\t'"$f"$'\n'
+    fi
+  done
+
+  chosen="$(printf '%s' "$entries" | wofi --dmenu \
+    --config "$ARCHY_HOME/wofi/config.rasi" \
+    --style "$ARCHY_GENERATED/wofi.css" \
+    --prompt "Wallpaper" \
+    --hide-input \
+    -)"
+  [[ -n $chosen ]] || exit 0
+
+  file="$(printf '%s' "$chosen" | cut -f2)"
+  set_wallpaper "$file"
+  ;;
+
+*)
+  echo "Usage: archy-wallpaper <set|show|list|next>" >&2
+  exit 1
+  ;;
+esac

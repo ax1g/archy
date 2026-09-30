@@ -1,6 +1,8 @@
 -- Window rules: which windows float, which get tags, and the compositor
 -- defaults that decide how windows behave at all.
 
+local apps = require("hypr.apps")
+
 -- Ignore client maximize requests; the compositor owns the state.
 o.window(".*", { suppress_event = "maximize" })
 
@@ -22,13 +24,8 @@ o.window(
 )
 
 -- Terminals are tagged so clipboard chords and the cascade can recognize them
--- without hardcoding class names in two places.
---
--- Kitty is the terminal. TUI.* is the class archy-launch-tui gives a kitty
--- window running a TUI, so a TUI still counts as a terminal for both of those.
--- Alacritty, foot, Ghostty and WezTerm are deliberately absent: the setup does
--- not use them, and a class nobody runs is a rule nobody can check.
-o.window("(kitty|TUI\\..*)", { tag = "+terminal" })
+-- without hardcoding class names in two places. The class list is in apps.lua.
+o.window(apps.TERMINAL_CLASS, { tag = "+terminal" })
 
 -- Browsers. Firefox-family windows drop the frost tag because a frosted page
 -- body over a blurred desktop makes text edges muddy; the looknfeel file

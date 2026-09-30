@@ -5,3 +5,4 @@ generated/
 ! switch. Kept out of the repo, since its contents are whichever theme was
 ! active at the time.
 colors/colors.conf.bak
+screenshots/

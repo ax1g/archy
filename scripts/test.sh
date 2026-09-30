@@ -158,6 +158,288 @@ for s in "$REPO_DIR"/scripts/archy-*; do
 done
 ((missing == 0)) && info "every script resolves lib.sh through its symlink"
 
+step "apps.txt"
+# apps.txt is the list for rebuilding without the old setup, so the one thing
+# that must never appear in it is a package from that repository: a list that
+# cannot be installed is worse than no list. This failed the first time it was
+# written, so it is checked rather than trusted.
+apps_file="$REPO_DIR/apps.txt"
+if [[ ! -f $apps_file ]]; then
+  fail "apps.txt is missing"
+else
+  # Package entries only. Everything from "Decisions" down is prose whose
+  # headings start with words like "browser" and "vscode", which are not
+  # packages, and a leak check that reads those is checking nothing.
+  #
+  # An entry starts at column 1. A wrapped description is indented, so it must
+  # not be read as a new name: the second line of the apple_cursor entry starts
+  # with "install.sh", which would otherwise register as a missing package.
+  entries="$(awk '/^## Decisions/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
+
+  leaked=()
+  while read -r pkg; do
+    [[ -n $pkg ]] || continue
+    repo="$(pacman -Si "$pkg" 2>/dev/null | awk -F': *' '/^Repository/{print $2}')"
+    [[ $repo == "omarchy" ]] && leaked+=("$pkg")
+  done < <(printf '%s\n' "$entries" | grep -vE '^\s*(#|$)' | awk 'NF{print $1}' | tr ',' '\n' | tr -d ' ' | sort -u)
+
+  if ((${#leaked[@]} > 0)); then
+    fail "apps.txt lists packages from the omarchy repo: ${leaked[*]}"
+    info "those are not installable once that repo is gone"
+  else
+    info "no packages from the omarchy repo"
+  fi
+
+  # A name listed twice is a maintenance trap: it looks deliberate and nobody
+  # checks which of the two wins.
+  #
+  # Scoped to the installable sections only. Everything from "Decisions" down is
+  # prose whose headings start with words that happen to be package names, like
+  # "neovim config", and counting those is noise rather than duplication. Only
+  # lines starting in column 1 are entries; wrapped descriptions are indented.
+  entries="$(awk '/^## Decisions/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
+  dupes=""
+  while read -r pkg; do
+    [[ -n $pkg ]] || continue
+    pacman -Si "$pkg" >/dev/null 2>&1 || continue
+    dupes+="$pkg "
+  done < <(printf '%s\n' "$entries" | grep -vE '^\s*(#|$)' | awk 'NF{print $1}' | tr ',' '\n' | tr -d ' ' | sort | uniq -d)
+
+  if [[ -n $dupes ]]; then
+    fail "apps.txt lists these more than once: $dupes"
+  else
+    info "no duplicated packages"
+  fi
+
+  # Every name that is meant to be installable has to exist, or the one-liner in
+  # the header fails on a typo. Two are expected to fail: they are documented as
+  # manual installs in their own section.
+  manual="apple_cursor"
+  unexpected=()
+  total=0
+  while read -r pkg; do
+    [[ -n $pkg ]] || continue
+    total=$((total + 1))
+    pacman -Si "$pkg" >/dev/null 2>&1 && continue
+    case " $manual " in
+      *" $pkg "*) continue ;;
+    esac
+    unexpected+=("$pkg")
+  done < <(printf '%s\n' "$entries" | grep -vE '^\s*(#|$)' | awk 'NF{print $1}' | tr ',' '\n' | tr -d ' ' | sort -u)
+
+  if ((${#unexpected[@]} > 0)); then
+    fail "apps.txt names these but pacman does not: ${unexpected[*]}"
+    info "either a typo, or it needs to move to the manual-install section"
+  else
+    info "all $total names resolve to a real package"
+  fi
+fi
+
+step "bar scripts resolve"
+# The bar's modules call these by bare name, resolved through PATH. If one is
+# not installed the module silently renders nothing, so the name is checked here
+# rather than discovered as a gap in the bar.
+for name in archy-marquee archy-notifications archy-network-menu archy-bluetooth-menu archy-volume archy-launcher archy-wallpaper; do
+  if [[ ! -x $ARCHY_BIN_DIR/$name ]]; then
+    fail "the bar calls $name but it is not linked into $ARCHY_BIN_DIR"
+  fi
+done
+info "all $(ls "$ARCHY_BIN_DIR" | grep -c '^archy-') archy scripts linked"
+
+# The bar config must not name a script that does not exist, which is the same
+# failure one level further out.
+missing_refs=""
+for ref in $(grep -oE '"(on-click|on-scroll-up|on-scroll-down|exec)":\s*"archy-[a-z-]+' \
+  "$REPO_DIR/waybar/config.jsonc" | grep -oE 'archy-[a-z-]+' | sort -u); do
+  [[ -x $ARCHY_BIN_DIR/$ref ]] || missing_refs+="$ref "
+done
+if [[ -n $missing_refs ]]; then
+  fail "waybar/config.jsonc calls scripts that do not exist: $missing_refs"
+else
+  info "every archy-* script the bar calls exists"
+fi
+
+# The bar must reference colors only through the generated stylesheet. A literal
+# color here would survive a theme change and then be wrong.
+if grep -nE '#[0-9a-fA-F]{6}\b' "$REPO_DIR/waybar/config.jsonc" >/dev/null; then
+  fail "waybar/config.jsonc has a literal color; colors belong in colors.conf"
+else
+  info "no literal colors in the bar config"
+fi
+
+step "wallpaper"
+default_wall="$REPO_DIR/wallpapers/totoro.png"
+if [[ -r $default_wall ]]; then
+  size="$(python3 - "$default_wall" <<'PY'
+import struct, sys
+data = open(sys.argv[1], 'rb').read(33)
+w, h = struct.unpack('>II', data[16:24])
+print(f"{w}x{h}")
+PY
+)"
+  # The panel is 1920x1080 at scale 1, so the default wallpaper should match it
+  # exactly. swww crops anything that does not, so a mismatch is not fatal, but
+  # it means the image is being resampled every login and losing detail.
+  if [[ $size == "1920x1080" ]]; then
+    info "default wallpaper is $size, matching the panel"
+  else
+    warn "default wallpaper is $size, panel is 1920x1080"
+    warn "swww will crop it, which is fine but resamples the image every login"
+  fi
+else
+  fail "the default wallpaper wallpapers/totoro.png is missing"
+fi
+
+step "jsonc"
+# Both of these are JSONC, and a naive `sed 's|//.*||'` check is wrong: it eats
+# the // in the $schema https:// URL and reports a parse error on a good file.
+# check-jsonc.py strips comments while tracking string state.
+if ! jsonc_out="$(python3 "$REPO_DIR/scripts/check-jsonc.py" \
+  "$REPO_DIR/fastfetch/config.jsonc" \
+  "$REPO_DIR/waybar/config.jsonc" 2>&1)"; then
+  printf '%s\n' "$jsonc_out" | sed 's/^/  /'
+  fail "a JSONC file does not parse"
+else
+  printf '%s\n' "$jsonc_out" | sed 's/^/  /'
+fi
+
+# fastfetch reads a command per row, and a row that shells out to something
+# absent prints an error every time fastfetch runs. Nothing in this config may
+# reference the old setup.
+if grep -qE '"text":[^"]*omarchy' "$REPO_DIR/fastfetch/config.jsonc"; then
+  fail "fastfetch has a row that runs an omarchy command"
+else
+  info "no fastfetch row depends on the old setup"
+fi
+
+# The logo is referenced by path. If it is missing, fastfetch falls back to
+# nothing and prints the modules with no logo at all, with no error.
+#
+# The path in the config is the installed one (~/.config/archy/...), because that
+# is what fastfetch reads at runtime, not the checkout path. Resolving it here
+# checks the repo copy at the same relative name.
+logo_src="$(grep -oE '"source":[[:space:]]*"~/[^"]*"' "$REPO_DIR/fastfetch/config.jsonc" |
+  head -n1 | grep -oE '~/[^"]*')"
+if [[ -n $logo_src ]]; then
+  # install.sh symlinks the checkout to ~/.config/archy, so that prefix in the
+  # config resolves to the repo copy. Map it back rather than assuming.
+  logo_path="$logo_src"
+  case "$logo_src" in
+    "~/.config/archy/"*) logo_path="$REPO_DIR/${logo_src#"~/.config/archy/"}" ;;
+    "~/"*) logo_path="$REPO_DIR/${logo_src#\~/}" ;;
+  esac
+  if [[ ! -r $logo_path ]]; then
+    fail "fastfetch logo missing: $logo_src -> $logo_path"
+  else
+    info "fastfetch logo present ($(basename "$logo_path"))"
+  fi
+else
+  info "fastfetch uses no logo"
+fi
+
+step "keyd"
+# A keymap that fails to parse means no remap at all, which on this machine is
+# indistinguishable from having no Escape key. The installer refuses to write an
+# unparseable one; this makes sure the file in the repo is itself valid.
+if ! command -v keyd >/dev/null 2>&1; then
+  info "keyd not installed, skipping the keymap check"
+else
+  conf="$REPO_DIR/keyd.conf"
+  problems=""
+  grep -q '^\[ids\]' "$conf" || problems+=" no [ids] section;"
+  grep -q '^\[main\]' "$conf" || problems+=" no [main] section;"
+  grep -q '^\[nav\]' "$conf" || problems+=" no [nav] section;"
+  # The specific pairing this config exists for: Caps Lock overloaded onto nav,
+  # where the vim keys live. Without both halves neither is reachable.
+  grep -qi 'capslock[[:space:]]*=[[:space:]]*overload(nav' "$conf" ||
+    problems+=" capslock is not overloaded onto nav;"
+  for key in h j k l; do
+    grep -qE "^${key}[[:space:]]*=" "$conf" || problems+=" no ${key} binding;"
+  done
+
+  if [[ -n $problems ]]; then
+    fail "keyd.conf is incomplete:$problems"
+  else
+    info "keyd.conf has the [nav] map and capslock overload"
+  fi
+fi
+
+step "screenshots"
+# The renderers read the generated files, so a component that silently renders in
+# the wrong theme is the failure worth catching: a missing @define-color block or
+# a generated file that was never written still produces a screenshot, just an
+# ugly one. This checks the inputs are present, not that the images look right.
+if [[ ! -x "$REPO_DIR/scripts/render-components.py" ]]; then
+  fail "scripts/render-components.py is missing or not executable"
+else
+  for f in waybar.css wofi.css mako.conf kitty.conf hyprlock.qml; do
+    [[ -s "$REPO_DIR/generated/$f" ]] ||
+      fail "generated/$f is missing; the component renderers would draw nothing"
+  done
+  if compgen -G "$REPO_DIR/screenshots/*.png" >/dev/null; then
+    info "$(ls "$REPO_DIR"/screenshots/*.png | wc -l) screenshots rendered"
+  else
+    info "no screenshots yet; run scripts/render-components.py"
+  fi
+fi
+
+step "shell"
+# A .bashrc that does not load is the most visible failure in this repo, and the
+# one it replaced sourced a defaults file for aliases and completions. So this
+# checks the replacement is self-contained and actually loads.
+if grep -qE 'OMARCHY_PATH|omarchy/default' "$REPO_DIR/bashrc"; then
+  fail "bashrc still sources the old setup"
+else
+  info "bashrc sources nothing outside the repo"
+fi
+
+# The early return for non-interactive shells has to come after the PATH and
+# locale blocks, or a script run over SSH gets neither.
+rc_line="$(grep -n 'return' "$REPO_DIR/bashrc" | head -n1 | cut -d: -f1)"
+path_line="$(grep -n 'local/bin' "$REPO_DIR/bashrc" | head -n1 | cut -d: -f1)"
+if [[ -n $rc_line && -n $path_line ]] && ((rc_line < path_line)); then
+  fail "bashrc returns before the PATH setup; scripts get no .local/bin"
+else
+  info "PATH is set before the interactive check"
+fi
+
+# Load it for real, in a stripped environment, and see whether the prompt hooks
+# and the aliases survive. A clean env matters: it is what a fresh session or an
+# SSH command actually looks like.
+if bash -c 'set -e; source "$1"' _ "$REPO_DIR/bashrc" 2>/dev/null; then
+  info "bashrc loads non-interactively without error"
+else
+  fail "bashrc errors when sourced"
+fi
+
+if out="$(env -i HOME="$HOME" TERM=dumb PATH="/usr/bin:/bin" \
+  bash --rcfile "$REPO_DIR/bashrc" -i -c 'echo ok' 2>&1)"; then
+  if [[ $out == *ok* ]]; then
+    info "bashrc loads interactively and returns to the prompt"
+  else
+    fail "interactive load did not reach the prompt: $out"
+  fi
+else
+  fail "interactive load failed: $out"
+fi
+
+# starship: it is a straight copy, so the only thing worth checking is that it
+# parses and that nothing in it reaches for a path that will not exist.
+if python3 -c "
+import sys, tomllib
+tomllib.load(open(sys.argv[1], 'rb'))
+" "$REPO_DIR/starship/starship.toml" 2>/dev/null; then
+  info "starship.toml parses"
+else
+  fail "starship.toml is not valid TOML"
+fi
+
+if grep -qiE 'omarchy|local/state' "$REPO_DIR/starship/starship.toml"; then
+  fail "starship.toml references the old setup"
+else
+  info "starship.toml is self-contained"
+fi
+
 step "packages"
 "$REPO_DIR/scripts/install.sh" --check 2>&1 | sed 's/^/  /'
 

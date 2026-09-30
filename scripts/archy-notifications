@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# archy:notifications -- count, list and dismiss notifications.
+#
+# Waybar has no notification module, so the count comes from mako's history
+# database. makoctl has to be able to read it, which needs the daemon running
+# (autostart.lua starts it).
+#
+# Usage:
+#   archy-notifications count          print the number queued
+#   archy-notifications list           pick one in wofi and invoke it
+#   archy-notifications dismiss-last   close the most recent
+#   archy-notifications dismiss-all    close everything
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+command -v makoctl >/dev/null 2>&1 || exit 0
+
+action="${1:-count}"
+
+# makoctl prints one line per queued notification, with the summary and the app
+# name. Sorted newest first by default.
+queued() {
+  makoctl list 2>/dev/null
+}
+
+case "$action" in
+count)
+  n="$(queued | grep -c .)"
+  # Zero prints as an empty module rather than "0", so the bar shows nothing
+  # when there is nothing. Waybar hides a module that prints empty.
+  ((n == 0)) || printf '%s' "$n"
+  ;;
+
+dismiss-last)
+  # makoctl -c closes the most recent, which is the top of the list.
+  makoctl -c >/dev/null 2>&1
+  ;;
+
+dismiss-all)
+  makoctl -c all >/dev/null 2>&1
+  ;;
+
+list)
+  lines="$(queued)"
+  [[ -n $lines ]] || exit 0
+
+  chosen="$(printf '%s\n' "$lines" | wofi --dmenu \
+    --config "$ARCHY_HOME/wofi/config.rasi" \
+    --style "$ARCHY_GENERATED/wofi.css" \
+    --prompt "Notifications" \
+    --hide-input \
+    -)"
+  [[ -n $chosen ]] || exit 0
+
+  # makoctl's index is 1-based over the list order, so find which line was picked
+  # rather than trying to match on the text.
+  index="$(printf '%s\n' "$lines" | grep -nFx -- "$chosen" | head -n1 | cut -d: -f1)"
+  [[ -n $index ]] || exit 0
+
+  # makoctl wants the group id, not the list index, so ask for it by position.
+  id="$(makoctl list 2>/dev/null | sed -n "${index}p" | head -n1 | cut -f1)"
+  [[ -n $id ]] || exit 0
+
+  # Invoking needs the group id, which is the first field.
+  makoctl action "$id" 0 >/dev/null 2>&1
+  ;;
+
+*)
+  echo "Usage: archy-notifications <count|list|dismiss-last|dismiss-all>" >&2
+  exit 1
+  ;;
+esac

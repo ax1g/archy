@@ -7,9 +7,13 @@
  * alternative — a palette pasted in here — would be a second copy of every
  * color and a second thing to forget when retheming.
  *
- * The @define-color names this file references are all defined in
+ * The @define-color names referenced below are all defined in
  * colors/colors.conf and emitted by the generator. Adding a color there is
  * enough; nothing needs changing in this file.
+ *
+ * The bar has no background. It sits directly on the wallpaper, which is why
+ * the text colors here are chosen to stay legible over a photograph rather than
+ * over a known flat color. See README for the thinking.
  */
 
 * {
@@ -20,117 +24,167 @@
   border-radius: 0;
 }
 
+/* No background-color here on purpose. archy-toggle sets the opacity when the
+ * bar is toggled off, so the transition has something to act on.
+ *
+ * What keeps the text readable over a photograph is the text-shadow on every
+ * module, not the bar background. A dark green-gray fill would have been easier
+ * and would have looked like a panel instead of a strip, which is the opposite
+ * of what the bar is supposed to be.
+ *
+ * The shadow is two passes: a tight one to give the glyph an edge against a
+ * busy background, and a wider one to darken enough area around the glyph to
+ * carry the shape. One pass alone leaves thin strokes like the network and
+ * bluetooth icons unreadable over a light sky. */
 window#waybar {
-  background-color: @darker_background;
-  color: @foreground;
+  color: @bright_foreground;
+  text-shadow:
+    0 0 2px @darker_background,
+    0 0 4px @darker_background,
+    0 0 6px @darker_background;
 }
 
 window#waybar.hidden {
   opacity: 0;
 }
 
-/* Modules are transparent so the bar reads as one surface. Only the outermost
- * ones carry the padding, since the bar is flush to the screen edge. */
+/* Every module is transparent, so the bar reads as one strip with no seams.
+ * Only the outer edges carry the inset, since the bar is flush to the screen.
+ *
+ * The text-shadow here is the one inherited from window#waybar; a module that
+ * sets its own color does not lose it, but a module that sets a shadow
+ * overrides rather than adds to it, so none of these do. */
 #launcher,
-#window,
 #workspaces,
 #clock,
+#network,
+#custom-notifications,
 #pulseaudio,
-#custom-brightness,
-#cpu,
-#memory,
-#tray {
+#bluetooth,
+#tray,
+#custom-marquee {
   background-color: transparent;
-  padding: 0 8px;
+  padding: 0 9px;
 }
 
 #launcher {
-  color: @accent;
+  color: @bright_foreground;
   font-size: 14px;
-  padding-left: 10px;
+  padding-left: 12px;
+  padding-right: 10px;
 }
 
 #launcher:hover {
-  background-color: @selection;
+  color: @accent;
 }
 
+/* Workspaces: the active one is a filled dot, everything else is a dim number.
+ * A filled block at 26px tall would sit on the wallpaper like a button, which
+ * is not what this bar does. */
 #workspaces {
   padding-left: 4px;
+  padding-right: 10px;
 }
 
+/* Inactive workspaces. The theme's mid foreground is too close to the light
+ * part of a wallpaper to carry a single thin digit, so these use the full
+ * foreground and rely on the shadow. There is no color that is simultaneously
+ * right for every wallpaper, and weight plus shadow beats a color that is right
+ * for none. */
 #workspaces button {
-  color: @dark_foreground;
+  color: @bright_foreground;
   background-color: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0 6px;
-  min-width: 20px;
+  padding: 0 7px;
+  min-width: 0;
   border-radius: 0;
+  font-weight: normal;
 }
 
 #workspaces button:hover {
-  color: @light_foreground;
-}
-
-/* The active workspace is a bottom edge, not a filled block: at 26px tall a
- * fill competes with the window area underneath it. */
-#workspaces button.active {
   color: @bright_foreground;
-  border-bottom: 2px solid @accent;
+  text-decoration: underline;
 }
 
-#window {
-  color: @light_foreground;
+/* The active one is the accent, bold, and gets a mark under it. Bold and the
+ * underline are both needed: the accent green alone is low contrast against a
+ * bright sky, and the underline carries the identification where the color
+ * cannot. */
+#workspaces button.active {
+  color: @accent;
+  font-weight: bold;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-#tray,
+/* The now-playing line. The dimmer foreground from the theme is not usable
+ * here: this is the one module that sits over the brightest part of the
+ * wallpaper, and at #a1af9c on a light sky it disappears. The full foreground
+ * plus the inherited shadow is the legibility floor. */
+#custom-marquee {
+  color: @bright_foreground;
+  padding-left: 6px;
+  max-width: 320px;
+}
+
+#clock {
+  color: @bright_foreground;
+  font-weight: bold;
+}
+
+#network,
 #pulseaudio,
-#custom-brightness {
-  color: @foreground;
+#bluetooth {
+  color: @bright_foreground;
   font-size: 14px;
 }
 
+#network.disconnected,
+#bluetooth.off,
+#pulseaudio.muted {
+  color: @muted;
+}
+
+#network:hover,
+#custom-notifications:hover,
+#pulseaudio:hover,
+#bluetooth:hover,
+#tray:hover,
+#clock:hover,
+#custom-marquee:hover {
+  color: @accent;
+}
+
+#custom-notifications {
+  color: @bright_foreground;
+  font-size: 14px;
+}
+
+/* Only shown when something is actually queued. */
+#custom-notifications.none {
+  color: @muted;
+}
+
 #tray {
-  padding-right: 4px;
+  padding-right: 10px;
+}
+
+#tray > .passive {
+  color: @foreground;
 }
 
 #tray > .needs-attention {
   color: @yellow;
 }
 
-#pulseaudio.muted,
-#custom-brightness.muted {
-  color: @dark_foreground;
-}
-
-#pulseaudio:hover,
-#custom-brightness:hover,
-#cpu:hover,
-#memory:hover,
-#clock:hover {
-  background-color: @selection;
-  color: @bright_foreground;
-}
-
-#cpu,
-#memory {
-  color: @dark_foreground;
-}
-
-#clock {
-  color: @light_foreground;
-  font-weight: bold;
-  padding-right: 10px;
-}
-
-/* Warn and critical states. */
-#cpu.warning,
-#memory.warning {
-  color: @yellow;
-}
-
-#cpu.critical,
-#memory.critical,
 #tray > .urgent {
   color: @red;
+}
+
+/* A text shadow on the tray glyphs is what makes them readable over a
+ * photograph, and it is inherited from window#waybar rather than restated
+ * here, so all the modules stay on the same three passes. */
+#tray > .passive,
+#tray > .needs-attention {
+  color: @foreground;
 }

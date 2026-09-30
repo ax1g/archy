@@ -1,11 +1,18 @@
 // archy: Waybar configuration.
 //
-// Requires Hyprland 0.56 and Waybar 0.11 or newer.
+// Layout, left to right:
+//   left    launcher, workspaces (only the ones that exist), now-playing marquee
+//   centre  clock
+//   right   network, notifications, audio, bluetooth, tray
 //
-// Colors are NOT here. They live in colors/colors.conf and reach this file
-// through generated/waybar.css, which archy-theme writes. The bar is started
-// with `waybar -s <that file>` from autostart.lua, so retheming never requires
-// editing this file or restarting Waybar by hand.
+// Colors come entirely from generated/waybar.css, which archy-theme writes from
+// colors/colors.conf. The bar is started with `waybar -s <that file>` from
+// autostart.lua, so retheming never needs an edit here.
+//
+// The bar has no background of its own. It sits on the wallpaper, so the
+// wallpaper is what you see behind it, and the module text is what has to stay
+// legible against whatever is there. Right-click anywhere toggles the bar's
+// opacity through archy-toggle, which is the same key as before.
 
 {
   "layer": "top",
@@ -14,8 +21,8 @@
   // 26px, matching the reserved strip the Quake console measures against.
   "height": 26,
 
-  // Flush to the edges: the bar is a strip, not a floating panel, so the
-  // desktop's own outer gaps remain the only frame around the layout.
+  // Flush to the edges. The bar is a strip over the wallpaper, not a floating
+  // panel, so no margin and no rounding.
   "margin": "0px 0px 0px 0px",
 
   "spacing": 0,
@@ -23,53 +30,66 @@
   "reload_interval": 1,
   "continuous": true,
 
-  "modules-left": ["launcher", "workspaces"],
-  "modules-center": ["window"],
-  "modules-right": ["tray", "pulseaudio", "custom-brightness", "cpu", "memory", "clock"],
+  "modules-left": ["launcher", "workspaces", "custom-marquee"],
+  "modules-center": ["clock"],
+  "modules-right": ["network", "custom-notifications", "pulseaudio", "bluetooth", "tray"],
 
   "launcher": {
-    "format": "󰣇 ",
+    "format": "󰣇",
     "tooltip": false,
-    "on-click": "archy-launcher"
+    "on-click": "archy-launcher",
+    "on-scroll-up": "archy-launcher"
   },
 
+  // Only workspaces that have been used. Ten persistent ones would sit there
+  // permanently, which is not what the bar looked like before.
+  //
+  // The active one is marked in the stylesheet with a filled dot, so there is no
+  // background block competing with the wallpaper.
   "workspaces": {
     "format": "{icon}",
-    "format-icons": {
-      "1": "1",
-      "2": "2",
-      "3": "3",
-      "4": "4",
-      "5": "5",
-      "6": "6",
-      "7": "7",
-      "8": "8",
-      "9": "9",
-      "10": "10"
-    },
     "on-click": "activate",
-    "sort-by-number": true,
-    "persistent-workspaces": {
-      "*": 10
-    }
+    "sort-by-number": true
   },
 
-  "window": {
-    "format": "{title}",
-    "max-length": 90,
-    "separate-workspaces": false,
-    "on-click": "activate"
-  },
-
-  "tray": {
-    "icon-size": 14,
-    "spacing": 6,
+  // Scrolling now-playing title. archy-marquee prints a window of the title
+  // that advances on its own, and blanks itself when nothing is playing.
+  "custom-marquee": {
+    "exec": "archy-marquee",
+    "interval": 1,
+    "format": "{}",
     "tooltip": false
+  },
+
+  "clock": {
+    "format": "󰥔 {:%H:%M}",
+    "format-time": "24H",
+    "tooltip-format": "<big>{calendar}</big>"
+  },
+
+  "network": {
+    "format-wifi": "󰤨 {signalStrength}%",
+    "format-ethernet": "󰤨 {ipaddr}",
+    "format-disconnected": "󰤭",
+    "tooltip-format": "{ifname} via {router}\n{ipaddr}/{mask}",
+    "on-click": "archy-network-menu"
+  },
+
+  // Notification count. Waybar has no notification module, so this counts mako's
+  // history. Right-click dismisses all of them, left-click opens the list.
+  "custom-notifications": {
+    "exec": "archy-notifications count",
+    "interval": 2,
+    "format": "󰂚 {}",
+    "tooltip": false,
+    "on-click": "archy-notifications list",
+    "on-scroll-up": "archy-notifications dismiss-last",
+    "on-scroll-down": "archy-notifications dismiss-all"
   },
 
   "pulseaudio": {
     "format": "{icon} {volume}%",
-    "format-muted": "󰝟 Muted",
+    "format-muted": "󰝟",
     "format-icons": {
       "default": ["󰕾"],
       "headphone": ["󰔏"],
@@ -82,34 +102,17 @@
     "on-scroll-down": "archy-volume lower"
   },
 
-  "cpu": {
-    "format": "󰻠 {usage}%",
-    "interval": 5,
+  "bluetooth": {
+    "format": "󰂯",
+    "format-connected": "󰂱",
+    "format-disabled": "󰂲",
+    "tooltip-format": "{device_alias}\n{status}",
+    "on-click": "archy-bluetooth-menu"
+  },
+
+  "tray": {
+    "icon-size": 14,
+    "spacing": 6,
     "tooltip": false
-  },
-
-  "memory": {
-    "format": "󰍛 {percentage}%",
-    "interval": 10,
-    "tooltip": false
-  },
-
-  // Not a real backlight module on this machine: the panel rejects DDC/CI
-  // writes, so hardware brightness does not exist. This reports the hyprsunset
-  // gamma value instead, which is what the brightness keys actually drive.
-  "custom-brightness": {
-    "exec": "archy-brightness",
-    "interval": 2,
-    "format": "󰛨 {}%",
-    "tooltip": false,
-    "on-click": "archy-brightness 50%-",
-    "on-scroll-up": "archy-brightness +5%",
-    "on-scroll-down": "archy-brightness 5%-"
-  },
-
-  "clock": {
-    "format": "󰥔  {:%a %d %b  %H:%M}",
-    "tooltip-format": "<big>{calendar}</big>",
-    "format-time": "24H"
   }
 }

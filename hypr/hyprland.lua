@@ -11,6 +11,7 @@
 --   input.lua       keyboard, mouse, touchpad
 --   looknfeel.lua   gaps, decoration, blur, animation
 --   windows.lua     window rules and tags
+--   apps.lua        app classes shared across files
 --   tiling.lua      core Hyprland bindings
 --   bindings.lua    my bindings
 --   floatcascade.lua  new-window cascade and SUPER+T
@@ -43,6 +44,9 @@ require("hypr.envs")
 
 -- Theme first: later files read colors from it.
 require("hypr.theme")
+
+-- App classes, shared so a window rule and a layout rule cannot disagree.
+require("hypr.apps")
 
 require("hypr.monitors")
 require("hypr.input")

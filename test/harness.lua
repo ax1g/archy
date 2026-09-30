@@ -408,9 +408,8 @@ local idle_ok, idle_err = pcall(function()
   if not body:find("on%-timeout") then
     error("no on-timeout key; the listener block would define no action")
   end
-  -- exec is not a hypridle listener key. A listener { timeout = N; exec = ... }
-  -- is what an earlier version of this file had, and it parses to nothing,
-  -- which means a machine that silently never locks.
+  -- exec is not a hypridle listener key. listener { timeout = N; exec = ... }
+  -- parses to nothing, and the symptom is a machine that silently never locks.
   if body:match("%f[%w]exec%s*=") then
     error("hypridle listeners do not have an exec key; it must be on-timeout")
   end

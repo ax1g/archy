@@ -8,26 +8,31 @@
 
 local M = {}
 
+local apps = require("hypr.apps")
+
 M.W = 1680
 M.H = 945
 M.STEP = 20
 M.WRAP = 8 -- max cascade steps before wrapping (8 * 20 = 160px)
 M.DEFER_MS = 60 -- let the window map before sizing
 
--- Classes the cascade must never touch. Empty on purpose: btop used to be here
--- while looknfeel tiled it, but it cascades with everything else now.
+-- Classes the cascade must never touch. Empty: every window cascades, including
+-- btop and terminals.
 --
--- zen is deliberately NOT here. It owns static float/size/center rules below
--- (one configure on first commit, no frosted flash), and listing it here would
--- also hide it from SUPER+T, since is_skipped() feeds the toggle path too. The
--- auto-float hook skips zen explicitly.
+-- The browser is deliberately NOT in this list. It owns static float/size/center
+-- rules below, and adding it here would also hide it from SUPER+T, since
+-- is_skipped() feeds the toggle path too. The auto-float hook skips it
+-- explicitly instead.
+--
+-- SKIP_CLASSES is the place for a window that should never cascade, e.g. one
+-- that manages its own geometry.
 M.SKIP_CLASSES = {}
 
--- Static float for Zen: applied by Hyprland on first commit so there is no
--- tiled-to-float resize race on a cold Gecko first paint.
-o.window("zen", { float = true })
-o.window("zen", { center = true })
-o.window("zen", { size = { M.W, M.H } })
+-- The browser floats at cascade size from a static rule, applied by Hyprland on
+-- first commit. See apps.lua for why.
+o.window(apps.BROWSER_CLASS, { float = true })
+o.window(apps.BROWSER_CLASS, { center = true })
+o.window(apps.BROWSER_CLASS, { size = { M.W, M.H } })
 
 local function base_tag(tag)
   return (tag or ""):gsub("%*$", "")
@@ -216,11 +221,11 @@ hl.on("window.open", function(win)
   local addr = field(win, "address")
   local ws_id = field(field(win, "workspace"), "id")
 
-  -- zen skips only this hook. A cold Gecko first paint is slow, and a deferred
-  -- float plus resize plus center would force a second configure cycle, which
-  -- shows as a blurry translucent flash under 0.93 frost with ignore_opacity
-  -- blur. zen already floats at cascade size from the static rules above.
-  if win and win.class == "zen" then
+  -- The browser skips only this hook. A slow first paint plus a deferred
+  -- float/resize/center forces a second configure cycle, which shows as a
+  -- blurry translucent flash under the frost. It already floats at cascade size
+  -- from the static rules above.
+  if win and win.class == apps.BROWSER_CLASS then
     return
   end
   if M.is_skipped(win) then

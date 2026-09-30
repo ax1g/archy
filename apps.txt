@@ -1,25 +1,26 @@
-# apps.txt — what I actually use.
+# apps.txt — what I use on a machine that does not have the old setup.
 #
-# Not the full package list; that is `pacman -Qqe` and it runs to 180 lines. This
-# is the subset I reach for, so that rebuilding a machine means installing these
-# and not reading a list of 180 packages wondering which half matter.
+# Every package here is from the Arch repos. Nothing from the other repository
+# appears anywhere in this file, deliberately: that repo is going away, and a
+# list for rebuilding from scratch is the wrong place to record things that will
+# not be installable afterwards.
 #
-# Where a package comes from matters more than usual here. Anything marked
-# [omarchy] is built and released by that project rather than by Arch, so it
-# comes out of its own repository and removing that setup removes the package.
-# Those are the ones to replace or drop deliberately. Everything unmarked is in
-# the standard Arch repos and needs no thought.
+# Where an app I used daily only existed there, it is written as a decision to
+# make rather than a package to install, near the bottom. Those are the only
+# real losses.
 #
-# fcitx5 and keyd are running now but nothing here starts them; see the note at
-# the bottom.
+# To install everything here:
+#   pacman -S --needed $(grep -vE '^\s*(#|$)' apps.txt | awk '{print $1}' | tr '\n' ' ')
+#
+# This is not what archy needs to run; scripts/install.sh covers that. This is
+# what I use.
 
 
 ## Terminal and shell
 
-kitty                  terminal. ExtraLight at 11.5, see kitty/kitty.conf
+kitty                  terminal, ExtraLight at 11.5, see kitty/kitty.conf
 foot                   second terminal, for when kitty's config is the problem
 bash                   login shell
-fish                   alt shell, mostly for one-off scripts
 starship               prompt
 tmux                   persistent sessions
 zoxide                  cd that learns
@@ -28,45 +29,41 @@ fzf                    fuzzy find, used by everything else
 bat                    cat with syntax highlighting
 eza                     ls with git status
 fd                     find, saner defaults
-ripgrep                 rg
-less, man-db, man-pages
+ripgrep
+less
+man-db, man-pages
 tree                   directory shape
 plocate                locate
 dua-cli                disk usage, interactive
-usage                  disk usage by directory
-git, git hub-cli       gh
+git, github-cli        gh
 inotify-tools          for scripts that watch files
-lua51, luarocks        fcitx5's config format is lua
 
 
 ## Editor
 
-visual-studio-code-bin
-omarchy-nvim          [omarchy] neovim setup. Carries its own plugins and
-                      keybinds; needs replacing, see the bottom
+code                   VS Code, the Arch build
+neovim
 vim                    for a quick edit over ssh
 tree-sitter-cli        parsers for nvim
 
 
 ## Languages and runtimes
 
-rustup, cargo          stable toolchain, installed under ~/.cargo
+rustup                 toolchain manager, installs into ~/.cargo
 base-devel             gcc, make, headers
 clang, llvm
 deno
 bun
 uv                     python packaging and venvs, the fast one
-python                 3.13, system
+python
 ruby                   mainly for gems
-dotnet-runtime         C#
 ollama                 local models
-llama-cpp              local inference, the C++ one
 
 
 ## Browsers
 
-zen-browser-bin        daily driver, the bindings target this
-google-chrome          only for things that need it
+firefox
+librewolf              hardened firefox, when I want the flags
 
 
 ## Containers and databases
@@ -74,7 +71,6 @@ google-chrome          only for things that need it
 docker, docker-buildx, docker-compose
 postgresql             project databases
 valkey                 redis-compatible
-mariadb-libs           client libs; the server is not installed
 lazydocker             tui over the above
 openbsd-netcat, socat  poking at sockets by hand
 
@@ -93,135 +89,95 @@ cava                    audio visualizer
 tesseract, tesseract-data-eng   OCR
 
 
-## Files, notes, and small tools
+## Files and notes
 
 nautilus                file manager
 nautilus-python         scripting hook for it
 obsidian                notes
-localsend                local file transfer
 qbittorrent              torrents
 qrencode, zbar          QR codes, encode and decode
-imv
 
 
 ## Desktop apps
 
-drawy                   drawing, the SUPER+D binding
+drawy                   drawing
 btop                    process and system monitor
 lazygit                 git tui
-cliamp                  [omarchy] the SUPER+M binding
-opencode                agent session, launched as a TUI
-omawrite                [omarchy] no longer bound
-omacalc                  [omarchy] calculator
-omacut                   [omarchy] clipboard/screenshot tool
-omazed                  [omarchy]
-tensaku                 [omarchy] annotation tool, the animation-none rule
-herdr                   [omarchy] terminal multiplexer, alternative to tmux
-chatgpt-bin             desktop client
-hyprpicker              color picker
-hyprland-guiutils       hyprland control panel
-hyprland-preview-share-picker
 
 
 ## System
 
-keyd                    keyboard remapping, runs as a system service
-asdcontrol              Apple Studio Display brightness and volume over USB-C
-ddcutil                 display control, mostly superseded by hyprsunset
-inetutils               traceroute, dig, and the rest of the classic net tools
-bluez, bluez-tools, bluez-utils
-pamixer, brightnessctl
-power-profiles-daemon   on battery vs plugged in
-tesseract               OCR
 strace                  what is actually happening
 expac                   package sizes
 arch-audit              orphaned packages
 ufw, ufw-docker
 btrfs-progs, exfatprogs, dosfstools
-zram-generator, inotify-tools
+zram-generator
+bluez, bluez-tools, bluez-utils
+pamixer, brightnessctl
+power-profiles-daemon   on battery vs plugged in
 hypridle, hyprlock, hyprsunset, hyprpicker
 xdg-desktop-portal, xdg-desktop-portal-hyprland, xdg-desktop-portal-gtk
 pipewire, pipewire-alsa, pipewire-jack, pipewire-pulse, wireplumber
-sddm                    login screen
-uwsm                    the session manager behind hyprland.desktop
+keyd                    keyboard remapping; the remap itself is in /etc/keyd
+linux, linux-firmware   the stock kernel, installed before the old repo goes
+linux-headers
 limine                  bootloader
-linux, linux-firmware   [omarchy] the kernel package is from the omarchy repo,
-                        so it needs a stock one when that repo goes
-linux-omarchy, linux-omarchy-headers   [omarchy]
-keyd
-fakeroot, pacman-contrib, sudo, base
+sudo, pacman-contrib, fakeroot, base
 
 
-## Fonts and cursors
+## Fonts and icons
 
 ttf-jetbrains-mono-nerd        the full weight set, required for ExtraLight
 ttf-cascadia-mono-nerd
 ttf-iosevka-nerd
-ttfx                  font installer
 noto-fonts, noto-fonts-cjk, noto-fonts-emoji
-woff2-font-awesome    tray icons
-capitaine-cursors
-yaru-icon-theme
-apple_cursor          the macOS pointer, GPL-3.0, not an official package;
-                      install.sh fetches it, see the README
+adwaita-icon-theme
+papirus-icon-theme
 
 
-## Replace before the old setup goes
+## Install by hand, not from pacman
 
-omarchy-nvim      [omarchy] carries a whole neovim configuration with its own
-                  plugins and keybinds. It is not a plain editor package. Either
-                  keep it and accept the dependency, or move the config to a
-                  standalone ~/.config/nvim first and install neovim from Arch.
+apple_cursor          the macOS pointer, GPL-3.0. Not in any Arch repo.
+                      install.sh fetches it from the release tarball when it is
+                      missing, so a plain install gets it.
 
-linux-omarchy     [omarchy] the kernel. Removing the repo takes the kernel with
-                  it, so install linux, linux-firmware and regenerate the
-                  initramfs before that repo is dropped, or the machine comes
-                  up with no kernel.
-
-linux-omarchy-headers  [omarchy] same, for out-of-tree modules.
-
-sddm              login screen, if I am keeping a login screen. Not required;
-                  Hyprland boots straight into a session.
-
-uwsm              the session manager that runs the current
-                  hyprland.desktop entry. archy launches apps with plain
-                  setsid and does not need it, but the session entry is
-                  uwsm-based, so removing it changes how the session starts.
+rust toolchain        rustup installs the toolchain into ~/.rustup, which is a
+                      separate download from the rustup package itself.
 
 
-## Not packages
+## Decisions, not packages
 
-A few names here are not package names and pacman will not find them, so they
-are listed where they actually come from instead:
+The pointer, the fonts and the desktop are all covered above. These are the
+places where something I used is not simply an Arch package any more, so each
+one needs a choice rather than an install command.
 
-opencode                the agent I launch as a TUI. Not a package; it comes
-                        from the same install path as the other agent tooling
-                        under ~/.local, so it is a manual install that has to be
-                        redone by hand on a new machine.
+browser               I have been using Zen, which only ever came from that
+                      repository. firefox and librewolf are the Arch
+                      equivalents and are listed above; if I want something
+                      closer to what I had, there is nothing in extra that is,
+                      and it stays a manual download.
 
-rustup                  the rust toolchain manager, not a package. It installs
-                        into ~/.cargo and ~/.rustup, so reinstalling rustup
-                        from the Arch repo is not enough; the toolchain itself
-                        is a separate download.
+vscode                the same situation, and easier: extra/code is the same
+                      editor, so the Arch package is the answer and nothing is
+                      lost.
 
-apple_cursor            the macOS pointer, GPL-3.0, and the AUR package of that
-                        name is not in the official repos. install.sh fetches it
-                        from the release tarball when it is missing, see the
-                        README.
+neovim config          my configuration is a plugin and keybind setup, not a
+                      package. It moves to a standalone ~/.config/nvim on its
+                      own; archy has no opinion about it and it is not listed
+                      here because there is nothing to install.
 
-The wayland-session-bindpid@ and wayland-wm@ units are session plumbing
-provided by uwsm, not separate packages.
+macOS pointer          apple_cursor is in a repository I do not use and is
+                      fetched as a tarball instead. It is GPL-3.0, so vendoring
+                      it into this repo is not something I can do quietly.
 
+display tooling       asdcontrol for an Apple Studio Display, and ddcutil for
+                      panels that accept DDC/CI. Neither is in extra, and
+                      neither is used daily here, since this panel rejects
+                      DDC/CI and brightness goes through hyprsunset instead.
 
-## Running now that nothing here starts
+local file transfer   LocalSend has no equivalent in extra. Not used daily,
+                      so it is not carrying anything.
 
-fcitx5            input method framework, started by an omarchy unit. My
-                  profile is keyboard-us with no second language configured, so
-                  it is not actually providing a second IME right now — it is a
-                  leftover default. Worth wiring into autostart only if I
-                  actually want to type in another language; fcitx5-gtk and
-                  fcitx5-qt are the GTK and Qt frontends for it.
-
-keyd              keyboard remapping, started as a system service by its own
-                  package, so it survives on its own. The remap itself lives in
-                  /etc/keyd, which is not in this repo.
+fonts                 ttfx was an installer for a font set. The individual
+                      font packages are listed above and cover it.

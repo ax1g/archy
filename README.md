@@ -51,7 +51,22 @@ A few of these are not the obvious choice, so the reasoning is here:
    is a child of the compositor rather than a systemd scope. If I ever want
    scoped units, it goes back in `o.launch` in `hypr/helpers.lua`.
 
-5. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
+5. The bashrc here is a rewrite, not a copy. The one it replaces was nine lines
+   long and two of them sourced a defaults file for aliases, completions and
+   functions, so copying it verbatim would have left an interactive shell with
+   almost nothing in it. What is in `bashrc` is an equivalent written out: the
+   eza and bat aliases, the fzf preview, zoxide's `cd`, the git shorthands, the
+   blank-line prompt hook with its clear/reset skip, fzf's completions, and the
+   docker and postgres service aliases.
+
+   Two details in it matter. The locale and `PATH` blocks sit **above** the
+   `[[ $- != *i* ]] && return`, because a script run over SSH is not interactive
+   and would otherwise get neither. And `.bashrc` is a replace rather than a
+   merge: `install.sh` refuses to overwrite an existing one and prints the
+   command to adopt the repo's copy, because the file on a real machine holds
+   exports that are not in any repo.
+
+6. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
    cascade, the clipboard chords and the region picker's transient bindings are
    stateful enough that imperative code is clearer than the declarative form.
 
@@ -153,6 +168,8 @@ archy/
 ├── colors/
 │   ├── colors.conf        the theme file
 │   └── themes/            alternates, picked with SUPER+SHIFT+T
+├── bashrc                 interactive shell
+├── starship/starship.toml prompt
 ├── kitty/kitty.conf       terminal
 ├── apps.txt               what I actually use, and what to replace
 ├── data/emoji.txt         the SUPER+. picker's list

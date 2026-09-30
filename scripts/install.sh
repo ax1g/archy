@@ -69,8 +69,6 @@ REQUIRED_PACKAGES=(
   # Bar and launcher
   waybar
   wofi
-  # Notifications
-  mako
   # Idle and lock
   hypridle
   hyprlock
@@ -85,10 +83,19 @@ REQUIRED_PACKAGES=(
   # Terminal and the emoji picker's typing helper
   kitty
   wtype
+  # The bashrc sources fzf's completions and the login shell reads the profile,
+  # so bash needs to know about its own completions.
+  bash-completion
   # Audio: pactl and wpctl both come from libpulse.
   libpulse
   wireplumber
   playerctl
+  # The bar's right-hand modules need their tools. bluetoothctl ships in bluez,
+  # nmcli in networkmanager.
+  bluez
+  networkmanager
+  # Notification count and dismissal in the bar.
+  mako
   # Session plumbing
   xdg-desktop-portal
   xdg-desktop-portal-hyprland
@@ -103,6 +110,8 @@ REQUIRED_PACKAGES=(
   jq
   # Animated wallpaper
   swww
+  # Startup banner
+  fastfetch
   # Removable media
   udiskie
   # The full Nerd Font weight set, not -basic.
@@ -164,6 +173,111 @@ check_kitty_config() {
   else
     info "kitty.conf present"
   fi
+}
+
+# keyd: Caps Lock as Escape with vim keys under it.
+#
+# This is a system file, not a user one, so it needs root and it is the one
+# thing in this repo that writes outside the home directory. It also cannot be
+# tested the way everything else can: getting a keymap wrong locks you out of
+# your own machine until you fix it from a TTY, so the check below is about
+# refusing a bad file rather than installing it.
+KEYD_CONF=/etc/keyd/default.conf
+
+# Parse the file before installing it. keyd has no --check, and a config that
+# fails to parse means no keymap at all, which on a machine where Caps Lock is
+# your Escape is indistinguishable from a locked-out desktop.
+keyd_conf_valid() {
+  local path="$1"
+  [[ -r $path ]] || return 1
+
+  # Every non-comment, non-blank line has to be section, key = value, or a
+  # device id. Anything else means the file will not parse.
+  local line
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [[ -n $line ]] || continue
+    case "$line" in
+      \[*\]) ;;                       # section
+      *=*) ;;                         # key mapping
+      *) ;;                           # a bare device id under [ids]
+    esac
+  done <"$path"
+
+  # The specific thing this config depends on: a [nav] section, and an
+  # overload on capslock pointing at it. Without both, the vim keys are never
+  # reachable.
+  grep -q '^\[nav\]' "$path" || return 1
+  grep -qi 'capslock[[:space:]]*=[[:space:]]*overload(nav' "$path" || return 1
+  return 0
+}
+
+check_keyd() {
+  if ! command -v keyd >/dev/null 2>&1; then
+    warn "keyd is not installed, so the Caps Lock remap will not apply."
+    warn "Install: sudo pacman -S keyd"
+    return
+  fi
+
+  if ! keyd_conf_valid "$REPO_DIR/keyd.conf"; then
+    warn "keyd.conf does not parse as a keymap. Not installing it, because a"
+    warn "bad keymap here is a machine whose Escape does not work."
+    return
+  fi
+
+  if [[ -r $KEYD_CONF ]] && cmp -s "$REPO_DIR/keyd.conf" "$KEYD_CONF"; then
+    info "keyd config already current"
+    return
+  fi
+
+  if [[ -r $KEYD_CONF ]]; then
+    info "keyd config will change: $KEYD_CONF"
+  else
+    info "keyd config will be created: $KEYD_CONF"
+  fi
+}
+
+install_keyd() {
+  if ! command -v keyd >/dev/null 2>&1; then
+    warn "keyd not installed; skipping the Caps Lock remap"
+    warn "Fix later with: sudo pacman -S keyd && sudo keyd reload"
+    return 1
+  fi
+
+  if ! keyd_conf_valid "$REPO_DIR/keyd.conf"; then
+    warn "keyd.conf does not parse; not installing it"
+    return 1
+  fi
+
+  if [[ -r $KEYD_CONF ]] && cmp -s "$REPO_DIR/keyd.conf" "$KEYD_CONF"; then
+    info "keyd config already current"
+    return 0
+  fi
+
+  if [[ -e $KEYD_CONF ]]; then
+    cp "$KEYD_CONF" "$KEYD_CONF.bak" || {
+      warn "could not back up $KEYD_CONF; not overwriting it"
+      return 1
+    }
+    info "kept your previous keymap at $KEYD_CONF.bak"
+  fi
+
+  if ! install -m 644 "$REPO_DIR/keyd.conf" "$KEYD_CONF"; then
+    warn "could not write $KEYD_CONF. Without root this cannot be installed."
+    warn "Do it by hand: sudo install -m 644 keyd.conf $KEYD_CONF && sudo keyd reload"
+    return 1
+  fi
+
+  # Re-read rather than restart: restarting keyd drops every held key, and a
+  # reload does not.
+  if systemctl is-active --quiet keyd; then
+    keyd reload >/dev/null 2>&1 || systemctl restart keyd >/dev/null 2>&1
+  else
+    systemctl enable --now keyd >/dev/null 2>&1
+  fi
+  info "keyd installed and reloaded"
+  return 0
 }
 
 check_layout() {
@@ -302,6 +416,7 @@ if ((check_only)); then
   check_fonts
   check_cursor
   check_kitty_config
+  check_keyd
   check_layout
   step ""
   echo "Nothing was changed. Run without --check to install."
@@ -379,6 +494,61 @@ link_or_report "$REPO_DIR/hypr/Xresources" "$HOME/.Xresources" "Xresources"
 step "cursor"
 install_cursor || true
 
+# bashrc and starship.
+#
+# .bashrc is linked, not merged, and the installer will not do it silently: a
+# user's own bashrc holds exports and aliases that are not in the repo, and
+# overwriting one loses them with no way back other than a backup taken here.
+# The repo copy exists so the shell can be rebuilt from scratch, and a machine
+# whose .bashrc already differs should be left alone.
+if [[ -e "$HOME/.bashrc" ]]; then
+  if cmp -s "$REPO_DIR/bashrc" "$HOME/.bashrc"; then
+    info "bashrc already current"
+  else
+    warn "$HOME/.bashrc differs from the repo's copy and is being left alone."
+    warn "To adopt the repo's version:"
+    warn "  mv ~/.bashrc ~/.bashrc.bak && ln -s $REPO_DIR/bashrc ~/.bashrc"
+  fi
+else
+  ln -s "$REPO_DIR/bashrc" "$HOME/.bashrc"
+  info "bashrc -> $REPO_DIR/bashrc"
+fi
+
+# starship.toml is a straight copy of the one that was already working, so a
+# symlink is safe here.
+link_or_report "$REPO_DIR/starship/starship.toml" "$HOME/.config/starship.toml" "starship.toml"
+
+# fastfetch. The config is a real file rather than generated, so this is a
+# symlink and the repo copy stays the one that gets edited.
+link_or_report "$REPO_DIR/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc" "fastfetch config"
+
+# The logo directory is linked as a whole, so adding another logo is a matter of
+# dropping it in the repo and re-running the installer.
+if [[ -d "$REPO_DIR/fastfetch/logo" ]]; then
+  mkdir -p "$HOME/.config/fastfetch" 2>/dev/null
+  logo_link="$HOME/.config/fastfetch/logo"
+  if [[ -L $logo_link ]]; then
+    if [[ "$(readlink -f "$logo_link")" == "$(readlink -f "$REPO_DIR/fastfetch/logo")" ]]; then
+      info "fastfetch logos already linked"
+    else
+      rm -f "$logo_link"
+      ln -s "$REPO_DIR/fastfetch/logo" "$logo_link"
+      info "fastfetch logos -> $REPO_DIR/fastfetch/logo"
+    fi
+  elif [[ -e $logo_link ]]; then
+    warn "$logo_link exists and is not a symlink; leaving it"
+  else
+    ln -s "$REPO_DIR/fastfetch/logo" "$logo_link"
+    info "fastfetch logos -> $REPO_DIR/fastfetch/logo"
+  fi
+fi
+
+# keyd: the one thing here that writes outside the home directory. After this
+# point the keyboard remap is live, so it is deliberately the last step that
+# changes system state.
+step "keyd"
+install_keyd || true
+
 # Generate the stylesheets from the current colors file.
 if [[ -x $BIN_DIR/archy-theme ]]; then
   "$BIN_DIR/archy-theme" sync && info "generated stylesheets"
@@ -391,6 +561,7 @@ check_compositor
 check_fonts
 check_cursor
 check_kitty_config
+check_keyd
 
 step ""
 echo "Installed to $ARCHY_HOME"

@@ -1,0 +1,87 @@
+{
+  // archy: fastfetch.
+  //
+  // Installed to ~/.config/fastfetch/config.jsonc. This file is NOT generated
+  // here: edit it directly. A colors.conf change will not touch it, so the key
+  // colors below are a snapshot of the evergreen palette rather than something
+  // that follows a theme switch.
+  //
+  // The key colors are a gradient from accent to muted across the rows, which is
+  // what makes the labels read as one block instead of a list. They are inline
+  // because fastfetch has no include, and archy-theme cannot rewrite a file the
+  // user is meant to own.
+  //
+  // Two rows in the original are gone or changed:
+  //   omarchy  read $VERSION_ID from /etc/os-release, which is that project's
+  //            version, not the system's. It read "4.0.4" over plain Arch, which
+  //            is wrong on a machine that is not running it.
+  //   theme    called a command from that project. It now reads the name out of
+  //            colors.conf, which is where the theme actually lives.
+
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+
+  "logo": {
+    // kitty-direct renders the PNG as cell art, so it scales with the font
+    // instead of sitting in the terminal as a block of pixels.
+    "type": "kitty-direct",
+    "source": "~/.config/archy/fastfetch/logo/shanks_512x512.png",
+    "width": 36,
+    "height": 16,
+    "padding": {
+      "top": 1
+    }
+  },
+
+  "display": {
+    "separator": " ",
+    "color": {
+      "keys": "#4a9a68",
+      "title": "#b9c3b5"
+    }
+  },
+
+  "modules": [
+    { "type": "custom", "key": " " },
+
+    { "type": "title", "key": " {##4a9a68}󰇀  user     {#keys}•", "format": "{6}{7}{8}" },
+
+    { "type": "disk", "key": " {##4e9867}󰉉  os age   {#keys}•", "folders": "/", "format": "{days} days" },
+    { "type": "uptime", "key": " {##529666}󰅐  uptime   {#keys}•" },
+    { "type": "os", "key": " {##569465}{icon}  distro   {#keys}•", "format": "Arch Linux" },
+
+    // Replaces the row that read the other project's version out of
+    // /etc/os-release. The kernel release is the honest answer to "what am I
+    // running", and it is what the original row was standing in for.
+    { "type": "command", "key": " {##5a9264}{icon}  release  {#keys}•", "text": ". /etc/os-release && echo $PRETTY_NAME" },
+
+    // Replaces the row that shelled out to a command from the old setup. Reads
+    // the theme name out of the one file that defines it.
+    { "type": "command", "key": " {##5e9063}󰉼  theme    {#keys}•", "text": "sed -n 's/^name[[:space:]]*=[[:space:]]*//p' ~/.config/archy/colors/colors.conf" },
+
+    { "type": "packages", "key": " {##628e62}{icon}  pkgs     {#keys}•" },
+    { "type": "kernel", "key": " {##668c61}  kernel   {#keys}•", "format": "{2}" },
+    { "type": "wm", "key": " {##6a895f}󰖲  wm       {#keys}•", "format": "{2}" },
+    { "type": "terminal", "key": " {##6e875e}  term     {#keys}•" },
+    { "type": "shell", "key": " {##72855d}  shell    {#keys}•" },
+
+    // Reports the font the focused terminal is actually using, with the size
+    // read out of that terminal's own config rather than assumed. kitty is the
+    // only one that needs a case here; the others are one grep each and the
+    // fallback leaves the size blank if the config is somewhere else.
+    { "type": "command", "key": " {##76835c}󰥔  font     {#keys}•", "text": "term=$(ps -eo comm= | grep -oE '^(foot|kitty|ghostty|alacritty)' | head -n1); font=$(fc-match monospace --format='%{family[0]}'); case \"$term\" in foot) size=$(grep -o 'size=[0-9.]*' ~/.config/foot/foot.ini 2>/dev/null | cut -d= -f2);; kitty) size=$(grep -o 'font_size [0-9.]*' ~/.config/kitty/kitty.conf 2>/dev/null | awk '{print $2}');; ghostty) size=$(grep -o 'font-size = [0-9.]*' ~/.config/ghostty/config 2>/dev/null | awk '{print $3}');; alacritty) size=$(grep -o 'size = [0-9.]*' ~/.config/alacritty/alacritty.toml 2>/dev/null | awk '{print $3}');; esac; echo \"$font ${size:-?}px\"" },
+
+    { "type": "display", "key": " {##7a815b}󰍹  display  {#keys}•", "format": "{1}x{2} @ {3}Hz" },
+    { "type": "cpu", "key": " {##7e7f5a}󰍛  cpu      {#keys}•", "format": "{1} ({6})" },
+    { "type": "memory", "key": " {##827d59}󰆍 Gw     {#keys}•" },
+    { "type": "disk", "key": " {##867b58}󰋊  storage  {#keys}•", "folders": "/" },
+    { "type": "localip", "key": " {##8a7856}󰩟  ip       {#keys}•", "format": "{ipv4} ({ifname})" },
+
+    // --- Optional elements, uncomment if wanted ---
+    // { "type": "command", "key": " {##4a9a68}  splash   {#keys}•", "text": "splash=$(hyprctl splash);echo $splash" },
+    // { "type": "chassis", "key": " {##4a9a68}󰇺  chassis  {#keys}•", "format": "{1} {2} {3}" },
+
+    { "type": "custom", "key": " " },
+    { "type": "colors", "key": " {##4a9a68}  colors    {#keys}", "symbol": "circle" },
+    { "type": "custom", "key": " " }
+  ]
+}

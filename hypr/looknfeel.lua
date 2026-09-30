@@ -2,10 +2,10 @@
 -- part — everything here is a deliberate value, not a default.
 
 local theme = require("hypr.theme")
+local apps = require("hypr.apps")
 local c = theme.colors
 
--- The cursor lives in cursor.lua, because the theme name and size have to be
--- set in two places to actually take effect.
+-- The cursor lives in cursor.lua, not here.
 
 -- Bolder small glyphs on low-DPI 1080p. Left disabled: fonts read too heavy
 -- with stem darkening off on this panel. Uncomment to try it again.
@@ -66,11 +66,12 @@ hl.config({
 -- Kept high (0.93 / 0.90) so text stays readable. Fullscreen stays solid.
 o.window({ tag = "default-opacity" }, { opacity = "0.93 override 0.90 override 1.0 override" })
 
--- Browsers opt out of default-opacity in windows.lua, so frost them
--- explicitly rather than inheriting a rule that no longer applies to them.
+-- Browsers drop the default-opacity tag in windows.lua, so they need this
+-- explicitly. A frosted page body over a blurred desktop makes text edges
+-- muddy, which is why they are not frosted any harder than this.
 o.window({ tag = "firefox-based-browser" }, { opacity = "0.93 override 0.90 override 1.0 override" })
 o.window({ tag = "chromium-based-browser" }, { opacity = "0.93 override 0.90 override 1.0 override" })
-o.window("zen", { opacity = "0.93 override 0.90 override 1.0 override" })
+o.window(apps.BROWSER_CLASS, { opacity = "0.93 override 0.90 override 1.0 override" })
 
 -- https://wiki.hypr.land/Configuring/Basics/Variables/#animations
 hl.config({ animations = { enabled = true } })

@@ -243,7 +243,7 @@ hl.unbind("SUPER + SHIFT + SPACE")
 o.bind("SUPER + SHIFT + SPACE", "Toggle bar", o.script("toggle") .. " bar", { locked = true })
 
 hl.unbind("SUPER + CTRL + SPACE")
-o.bind("SUPER + CTRL + SPACE", "Wallpaper", o.script("wallpaper-menu"))
+o.bind("SUPER + CTRL + SPACE", "Wallpaper", o.script("wallpaper") .. " next")
 
 -- Cursor zoom.
 hl.unbind("SUPER + CTRL + Z")

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# archy:network-menu -- toggle the network from the bar.
+#
+# nmcli is what NetworkManager ships, and NetworkManager is the service managing
+# the connection, so this drives the same thing the desktop's own settings would.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+command -v nmcli >/dev/null 2>&1 || {
+  notify "nmcli not available; NetworkManager is not managing the network" normal
+  exit 1
+}
+
+# One line per connection: the name, then a marker for the active one.
+list="$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null)"
+all="$(nmcli -t -f NAME con show 2>/dev/null)"
+
+[[ -n $all ]] || exit 0
+
+current="$(nmcli -t -f NAME,DEVICE con show --active 2>/dev/null | head -n1 | cut -d: -f1)"
+
+menu=""
+while IFS= read -r name; do
+  [[ -n $name ]] || continue
+  if [[ $name == "$current" ]]; then
+    menu+="● ${name}"$'\t'"nmcli con up id \"$name\""$'\n'
+  else
+    menu+="  ${name}"$'\t'"nmcli con up id \"$name\""$'\n'
+  fi
+done <<<"$all"
+
+# Bring the active one down last, so there is a way back to what was working.
+menu+=$'\n'"Disconnect"$'\t'"nmcli con down id \"$current\""
+
+chosen="$(printf '%s' "$menu" | wofi --dmenu \
+  --config "$ARCHY_HOME/wofi/config.rasi" \
+  --style "$ARCHY_GENERATED/wofi.css" \
+  --prompt "Network" \
+  --hide-input \
+  -)"
+[[ -n $chosen ]] || exit 0
+
+action="$(printf '%s' "$chosen" | cut -f2)"
+[[ -n $action ]] || exit 0
+
+eval "$action" >/dev/null 2>&1

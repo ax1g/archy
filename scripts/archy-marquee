@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# archy:marquee -- a scrolling window onto the now-playing title.
+#
+# Prints a slice of the current track's title that advances one character per
+# second, so a long title scrolls instead of being truncated or pushing the rest
+# of the bar around. Prints nothing when nothing is playing, so the bar closes
+# the gap rather than leaving an empty slot.
+#
+# Usage: archy-marquee
+#
+# Waybar calls this once a second. The scroll position is kept in a state file
+# rather than in the script, because Waybar starts a new process every time and
+# an in-memory counter would reset on every call.
+
+source "$(dirname "$(readlink -f "$0")")/lib.sh"
+
+STATE_FILE="$ARCHY_STATE_DIR/marquee-offset"
+
+command -v playerctl >/dev/null 2>&1 || exit 0
+
+# Pause on: a title this short needs no scrolling, and scrolling something short
+# looks broken rather than busy.
+MIN_LENGTH=40
+# A visible gap between the end of the title and the start of the next pass.
+PAUSE=3
+
+# Read "Artist - Title" and strip the player suffix some players append.
+title="$(playerctl metadata --format '{{artist}} - {{title}}' 2>/dev/null | head -n1)"
+[[ -n $title ]] || exit 0
+
+# Nothing playing, or the title is short enough to just print.
+if ((${#title} <= MIN_LENGTH)); then
+  printf '%s' "$title"
+  exit 0
+fi
+
+# How wide the window is. Matches the max-width in the stylesheet, in
+# characters rather than pixels, since the font is monospace and 12px.
+WIDTH=32
+
+# Cycle: title length, then PAUSE seconds of the blank separator.
+CYCLE=$((${#title} + PAUSE))
+[[ $CYCLE -gt 0 ]] || exit 0
+
+offset=0
+[[ -r $STATE_FILE ]] && read -r offset <"$STATE_FILE"
+[[ $offset =~ ^[0-9]+$ ]] || offset=0
+((offset >= CYCLE)) && offset=0
+
+# Inside the pause, print nothing. Waybar shows an empty module, which is what
+# closes the gap.
+if ((offset > ${#title})); then
+  printf '%s' "$offset" >"$STATE_FILE"
+  exit 0
+fi
+
+# A window one wider than the title, so the text scrolls fully off the left
+# edge instead of leaving a stub.
+window="${title:offset:WIDTH}"
+
+# Pad to a fixed width so the text does not reflow the bar as it scrolls.
+printf '%-*s' "$WIDTH" "$window"
+printf '%s' "$((offset + 1))" >"$STATE_FILE"
