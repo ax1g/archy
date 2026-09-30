@@ -456,6 +456,15 @@ else
   info "no secret-looking values in opencode/"
 fi
 
+# The installer ends with a restart verdict: loud when a logout is needed,
+# explicit when it is not, and honest when no session was running at all.
+if grep -q "Restart needed" "$REPO_DIR/install.sh" && \
+  grep -q "No restart needed" "$REPO_DIR/install.sh"; then
+  info "install.sh ends with a restart verdict"
+else
+  fail "install.sh never tells the user whether a restart is needed"
+fi
+
 step "installer behavior"
 # A reload is what picks up the new config in the running session; without it
 # the user installs and nothing changes until the next login.
@@ -484,6 +493,14 @@ if grep -q "archy-wallpaper.*set" "$REPO_DIR/install.sh"; then
   info "install.sh sets the wallpaper instead of waiting for a login"
 else
   fail "install.sh never sets the wallpaper; a reload leaves the screen bare"
+fi
+
+# The gsettings cursor write lives in the installer because autostart only
+# does it on hyprland.start, which never re-fires on reload.
+if grep -q "gsettings set org.gnome.desktop.interface cursor-theme" "$REPO_DIR/install.sh"; then
+  info "install.sh applies the cursor theme to gsettings"
+else
+  fail "install.sh never writes the gsettings cursor; a mid-session install keeps the old pointer"
 fi
 
 step "config keys"

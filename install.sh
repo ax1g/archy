@@ -29,7 +29,7 @@ done
 if (( ! check_only )) && (( EUID != 0 )); then
   echo "archy install needs root for pacman and the system config."
   echo "Re-running with sudo; user files still land in the real home directory."
-  exec sudo --preserve-env=HYPRLAND_INSTANCE_SIGNATURE,XDG_RUNTIME_DIR,WAYLAND_DISPLAY "$0" "$@"
+  exec sudo --preserve-env=HYPRLAND_INSTANCE_SIGNATURE,XDG_RUNTIME_DIR,WAYLAND_DISPLAY,DBUS_SESSION_BUS_ADDRESS "$0" "$@"
 fi
 
 REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -517,9 +517,36 @@ move_aside() {
   fi
 }
 
+# The compositor draws its pointer from the gsettings theme while
+# cursor:sync_gsettings_theme is on, and autostart.lua only writes those keys
+# on hyprland.start — which fires at boot, never on reload. Linking a new
+# config mid-session therefore leaves gsettings on the old theme until the
+# next login, so the installer applies the repo's cursor here, as the user.
+apply_cursor_gsettings() {
+  local theme size
+  theme="$(grep -oP '^\s*local CURSOR_THEME\s*=\s*"\K[^"]+' "$REPO_DIR/hypr/cursor.lua" | head -n1)"
+  size="$(grep -oP '^\s*local CURSOR_SIZE\s*=\s*\K[0-9]+' "$REPO_DIR/hypr/cursor.lua" | head -n1)"
+  if [[ -z ${theme:-} || -z ${size:-} ]]; then
+    warn "could not read the cursor theme out of hypr/cursor.lua; leaving gsettings alone"
+    return 1
+  fi
+
+  if as_user gsettings set org.gnome.desktop.interface cursor-theme "$theme" &&
+    as_user gsettings set org.gnome.desktop.interface cursor-size "$size"; then
+    info "cursor theme applied to gsettings: $theme, size $size"
+  else
+    warn "gsettings cursor write failed (no user bus here?); it applies on its own at the next login"
+    return 1
+  fi
+}
+
 compositor_up() {
   as_user hyprctl version >/dev/null 2>&1
 }
+
+# Reasons a logout/login is still needed after the reload. A reload picks up
+# almost everything, but permission rules (screencopy) only activate on a full
+# compositor restart, never on reload.
 
 step "[1/7] system packages — installing what the desktop needs from pacman"
 info "missing ones go in with: pacman -S --needed; the rest are left alone"
@@ -567,6 +594,7 @@ link_or_report "$REPO_DIR" "$ARCHY_HOME" "archy config"
 # session file. Pointing ~/.config/hypr at the repo's hypr/ is what makes this
 # checkout the main config: a bare Hyprland boots straight into it.
 move_aside "$HYPR_HOME"
+restart_reasons=()
 if [[ -L $HYPR_HOME ]] && [[ "$(readlink -f "$HYPR_HOME")" == "$(readlink -f "$REPO_DIR/hypr")" ]]; then
   info "hypr config already linked: $HYPR_HOME -> $REPO_DIR/hypr"
 else
@@ -574,6 +602,7 @@ else
   ln -s "$REPO_DIR/hypr" "$HYPR_HOME"
   ownit "$HYPR_HOME"
   info "hypr config linked: $HYPR_HOME -> $REPO_DIR/hypr"
+  restart_reasons+=("the Hyprland config source changed; permission rules (screencopy) only activate on a full restart, never on reload")
 fi
 ensure_dir "$BIN_DIR"
 
@@ -707,8 +736,13 @@ fi
 # Reload the running session so it picks up the new config now, not on the
 # next login. A reload does not re-run autostart and does not activate
 # permission rules (screencopy.lua) — those go live on a full restart.
-step "[7/7] session — reloading Hyprland and setting the wallpaper"
+step "[7/7] session — cursor theme, Hyprland reload and wallpaper"
+session_live=0
 if compositor_up; then
+  session_live=1
+  info "applying the repo cursor to gsettings (autostart only does this at boot)"
+  apply_cursor_gsettings || true
+
   info "telling the running compositor to reload its config"
   if as_user hyprctl reload; then
     info "compositor reloaded"
@@ -753,10 +787,19 @@ echo ""
 echo "Notes:"
 echo "  - The running shell keeps its old config: open a new terminal (or run"
 echo "    'exec bash') to get the new prompt."
+if ((session_live == 0)); then
+  echo "  - No session was running; everything applies on its own at the next login."
+elif ((${#restart_reasons[@]} > 0)); then
+  echo ""
+  echo "Restart needed — log out and back in once:"
+  for reason in "${restart_reasons[@]}"; do
+    echo "  - $reason"
+  done
+else
+  echo "  - No restart needed: the reload above picked up everything."
+fi
 echo "  - colors/colors.conf is the only file to edit to retheme."
 echo "    Run 'archy-theme apply' afterward."
-echo "  - Permission rules (screencopy) activate on a full compositor restart,"
-echo "    never on reload. Log out and back in once after this install."
 echo "  - Put wallpapers in $ARCHY_HOME/wallpapers/, then SUPER+CTRL+SPACE."
 echo "  - Log in through a display manager if you want one; archy does not"
 echo "    install one, and a bare Hyprland session boots straight into it."
