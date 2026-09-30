@@ -271,6 +271,24 @@ else
   info "no literal colors in the bar config"
 fi
 
+# waybar 0.15 treats an unknown CSS property as fatal and exits on launch, so
+# the bar is gone with nothing in the logs. These two web-CSS properties did
+# exactly that; GTK knows neither. (Comments excluded: the ban is documented
+# in the file.)
+if grep -vE '^\s*\*' "$REPO_DIR/waybar/style.css" | grep -E 'text-underline-offset|max-width' >/dev/null; then
+  fail "waybar/style.css uses a property GTK does not know; the bar will exit on launch"
+else
+  info "no non-GTK properties in the bar stylesheet"
+fi
+
+# Every waybar launch must pass -c and -s. A bare waybar falls back to
+# ~/.config/waybar, which does not exist here, and comes up in stock colors.
+if grep -rn "setsid -f waybar *$" "$REPO_DIR/scripts" "$REPO_DIR/hypr" 2>/dev/null | grep -v "^.*#"; then
+  fail "a bare waybar launch exists; it renders the stock bar, not ours"
+else
+  info "every waybar launch passes its config and stylesheet"
+fi
+
 step "wallpaper"
 default_wall="$REPO_DIR/wallpapers/totoro.png"
 if [[ -r $default_wall ]]; then
@@ -424,6 +442,60 @@ if grep -riE '"(password|passwd|token|secret|api[_-]?key)"[[:space:]]*:[[:space:
 else
   info "no secret-looking values in opencode/"
 fi
+
+step "installer behavior"
+# A reload is what picks up the new config in the running session; without it
+# the user installs and nothing changes until the next login.
+if grep -q "hyprctl reload" "$REPO_DIR/install.sh"; then
+  info "install.sh reloads the compositor after installing"
+else
+  fail "install.sh never reloads Hyprland; the install looks like it did nothing"
+fi
+# --config takes a file. The directory form fails with "not a regular file"
+# and reads as a broken install.
+if grep -qE '\-\-config \$ARCHY_HOME/hypr("|$|[^/])' "$REPO_DIR/install.sh"; then
+  fail "install.sh suggests --config with the hypr directory instead of hyprland.lua"
+else
+  info "no directory-form --config hint"
+fi
+# A real ~/.config/hypr used to stop the install with a move-it-yourself
+# message. It is moved to a timestamped .bak now.
+if grep -q "move_aside \"\$HYPR_HOME\"" "$REPO_DIR/install.sh"; then
+  info "~/.config/hypr is moved aside automatically"
+else
+  fail "install.sh leaves a real ~/.config/hypr for the user to move by hand"
+fi
+# The wallpaper is set during the install because a reload never re-runs
+# autostart, where the wallpaper otherwise comes from.
+if grep -q "archy-wallpaper.*set" "$REPO_DIR/install.sh"; then
+  info "install.sh sets the wallpaper instead of waiting for a login"
+else
+  fail "install.sh never sets the wallpaper; a reload leaves the screen bare"
+fi
+
+step "config keys"
+# screencopy:allow_token_by_default is an xdg-desktop-portal-hyprland setting,
+# not a compositor key. The compositor rejects it as unknown on every load.
+# (Comments excluded: the history of the key is documented in the file.)
+if grep -vE '^\s*--' "$REPO_DIR/hypr/screencopy.lua" | grep -q "allow_token_by_default"; then
+  fail "screencopy.lua sets the dead allow_token_by_default key"
+else
+  info "no dead screencopy key"
+fi
+if grep -q "hl.permission" "$REPO_DIR/hypr/screencopy.lua"; then
+  info "capture tools are allowed through hl.permission"
+else
+  fail "screencopy.lua allows nothing; captures block on a permission dialog"
+fi
+# The compositor draws the pointer from the gsettings theme while sync is on;
+# the software cursor keeps virtual GPUs from drawing a second, corrupt one.
+for key in sync_gsettings_theme no_hardware_cursors; do
+  if grep -q "$key" "$REPO_DIR/hypr/cursor.lua"; then
+    info "cursor.lua sets $key"
+  else
+    fail "cursor.lua does not set $key"
+  fi
+done
 
 step "screenshots"
 # The renderers read the generated files, so a component that silently renders in
@@ -615,6 +687,16 @@ for prog in waybar mako hypridle hyprlock hyprsunset swww hyprpolkitagent udiski
   fi
 done
 info "autostarted programs are all in the installer's package list"
+
+# The shell only looks like the repo's shell when its tools are installed:
+# starship draws the prompt and the blank line above it, and the aliases and
+# hooks degrade silently without fzf, zoxide, eza and bat.
+for prog in starship fzf zoxide eza bat; do
+  if ! grep -qE "^[[:space:]]+$prog\$" "$REPO_DIR/install.sh"; then
+    fail "the bashrc needs $prog but install.sh does not install it"
+  fi
+done
+info "shell tools are all in the installer's package list"
 
 step "packages"
 "$REPO_DIR/install.sh" --check 2>&1 | sed 's/^/  /'
