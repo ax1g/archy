@@ -1,8 +1,8 @@
 -- Cursor theme and size.
 --
 --   https://github.com/ful1e5/apple_cursor  (GPL-3.0)
---   installed at ~/.local/share/icons/macOS, or system-wide from the AUR
---   package of the same name.
+--   vendored in the repo under cursors/macOS/ and installed system-wide to
+--   /usr/share/icons by install.sh.
 --
 -- There are two independent paths to the pointer and both have to be set, which
 -- is the part that is easy to get half right:

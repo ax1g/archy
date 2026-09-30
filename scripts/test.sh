@@ -34,7 +34,7 @@ rc=0
 step() { printf '\n== %s\n' "$*"; }
 
 step "syntax"
-for f in "$REPO_DIR"/scripts/archy-* "$REPO_DIR"/scripts/lib.sh "$REPO_DIR"/scripts/install.sh; do
+for f in "$REPO_DIR"/scripts/archy-* "$REPO_DIR"/scripts/lib.sh "$REPO_DIR"/install.sh; do
   bash -n "$f" || fail "bash -n $(basename "$f")"
 done
 for f in "$REPO_DIR"/hypr/*.lua; do
@@ -368,6 +368,63 @@ else
   fi
 fi
 
+step "vendored cursor"
+# The pointer ships in the repo, so the installer has something to install
+# with no network and no AUR helper. An index.theme without cursor files (or
+# the reverse) resolves to nothing and the desktop falls back silently.
+if [[ -r "$REPO_DIR/cursors/macOS/index.theme" ]]; then
+  cursor_count="$(ls "$REPO_DIR/cursors/macOS/cursors" 2>/dev/null | wc -l)"
+  if ((cursor_count > 0)); then
+    info "cursors/macOS vendored ($cursor_count cursor files)"
+  else
+    fail "cursors/macOS has an index.theme but no cursor files"
+  fi
+else
+  fail "cursors/macOS is missing; install.sh has no cursor to install"
+fi
+# GPL-3.0 redistribution carries the license text with the work.
+if [[ -r "$REPO_DIR/cursors/LICENSE" ]]; then
+  info "cursor license present"
+else
+  fail "cursors/LICENSE is missing; the vendored theme ships without its license"
+fi
+
+step "opencode"
+# The global config, rules, commands and skills are vendored and symlinked in
+# by the installer. The JSON has to parse or the client ignores it.
+if python3 -c "
+import json, sys
+json.load(open(sys.argv[1]))
+" "$REPO_DIR/opencode/opencode.json" 2>/dev/null; then
+  info "opencode.json parses"
+else
+  fail "opencode/opencode.json is not valid JSON"
+fi
+for piece in AGENTS.md commands skills; do
+  if [[ -e "$REPO_DIR/opencode/$piece" ]]; then
+    info "opencode/$piece present"
+  else
+    fail "opencode/$piece is missing; install.sh links it and would link nothing"
+  fi
+done
+# service.json holds an auth secret and cli.json is machine-local TUI taste.
+# Neither belongs in the repo; the installer never touches them either.
+private_leak=0
+for private in service.json cli.json; do
+  if [[ -e "$REPO_DIR/opencode/$private" ]]; then
+    fail "opencode/$private is in the repo; it stays on the machine"
+    private_leak=1
+  fi
+done
+((private_leak == 0)) && info "no machine-local files vendored"
+# No credential values hiding in the vendored copy, whatever the key is called.
+if grep -riE '"(password|passwd|token|secret|api[_-]?key)"[[:space:]]*:[[:space:]]*"[^"]+"' \
+  "$REPO_DIR/opencode" >/dev/null 2>&1; then
+  fail "opencode/ contains a secret-looking value; move it to the local config"
+else
+  info "no secret-looking values in opencode/"
+fi
+
 step "screenshots"
 # The renderers read the generated files, so a component that silently renders in
 # the wrong theme is the failure worth catching: a missing @define-color block or
@@ -462,7 +519,7 @@ else
     fail "waybar has a battery module but there is no battery"
     desktop_only=1
   fi
-  if grep -q "power-profiles-daemon" "$REPO_DIR/scripts/install.sh" "$REPO_DIR/apps.txt" 2>/dev/null; then
+  if grep -q "power-profiles-daemon" "$REPO_DIR/install.sh" "$REPO_DIR/apps.txt" 2>/dev/null; then
     fail "power-profiles-daemon is listed but there is no battery to switch away from"
     desktop_only=1
   fi
@@ -553,14 +610,14 @@ fi
 # Each one autostart.lua launches should also be named in the installer's
 # package list, or a fresh machine will not have it.
 for prog in waybar mako hypridle hyprlock hyprsunset swww hyprpolkitagent udiskie; do
-  if ! grep -qE "^[[:space:]]+$prog\$" "$REPO_DIR/scripts/install.sh"; then
+  if ! grep -qE "^[[:space:]]+$prog\$" "$REPO_DIR/install.sh"; then
     fail "autostart launches $prog but install.sh does not list it"
   fi
 done
 info "autostarted programs are all in the installer's package list"
 
 step "packages"
-"$REPO_DIR/scripts/install.sh" --check 2>&1 | sed 's/^/  /'
+"$REPO_DIR/install.sh" --check 2>&1 | sed 's/^/  /'
 
 step ""
 if ((rc == 0)); then

@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
 # archy: install or update.
 #
-# Symlinks this checkout into ~/.config/archy, links the entry point into
-# ~/.config/hypr, installs the scripts into ~/.local/bin, generates the
-# stylesheets, and reports anything the desktop needs that is not installed.
+# Run with sudo: it installs the pacman packages, writes the keyd config and
+# the system-wide cursor theme, then links the user config as the real user.
+#
+#   sudo ./install.sh [--force]
+#   ./install.sh --check    # reports what is missing, changes nothing
 #
 # Idempotent: safe to re-run after every git pull.
-#
-# Usage: install.sh [--check] [--force]
-#
-#   --check   report what is missing and where things would go, change nothing
-#   --force   overwrite a symlink that points somewhere unexpected
 
 set -uo pipefail
-
-REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-ARCHY_HOME="${ARCHY_HOME:-$HOME/.config/archy}"
-HYPR_HOME="${HYPR_HOME:-$HOME/.config/hypr}"
-BIN_DIR="${ARCHY_BIN_DIR:-$HOME/.local/bin}"
 
 check_only=0
 force=0
@@ -27,15 +19,66 @@ for arg in "$@"; do
   --force) force=1 ;;
   *)
     echo "Unknown option: $arg" >&2
-    echo "Usage: install.sh [--check] [--force]" >&2
+    echo "Usage: sudo ./install.sh [--force] | ./install.sh --check [--force]" >&2
     exit 1
     ;;
   esac
 done
 
+# The install path needs root (pacman, /etc/keyd, /usr/share/icons), so
+# re-run under sudo rather than failing halfway through. The check path is
+# read-only and runs fine as the user.
+if (( ! check_only )) && (( EUID != 0 )); then
+  echo "archy install needs root for pacman and the system config."
+  echo "Re-running with sudo; user files still land in the real home directory."
+  exec sudo --preserve-env=HYPRLAND_INSTANCE_SIGNATURE,XDG_RUNTIME_DIR,WAYLAND_DISPLAY "$0" "$@"
+fi
+
+REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+
+# When elevated, $HOME is /root and every user path below would be wrong, so
+# resolve the real user first and point HOME at them. Invoked directly as the
+# user (check mode, or a root login), this is a no-op.
+REAL_USER="${SUDO_USER:-$(id -un)}"
+REAL_HOME="$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6)"
+[[ -n ${REAL_HOME:-} ]] || REAL_HOME="$HOME"
+if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} ]]; then
+  HOME="$REAL_HOME"
+  export HOME
+fi
+
+ARCHY_HOME="${ARCHY_HOME:-$HOME/.config/archy}"
+HYPR_HOME="${HYPR_HOME:-$HOME/.config/hypr}"
+BIN_DIR="${ARCHY_BIN_DIR:-$HOME/.local/bin}"
+
 info() { printf '  %s\n' "$*"; }
 step() { printf '\n%s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*" >&2; }
+
+# Ownership for anything created inside the real user's home. Running as root
+# leaves root-owned symlinks behind otherwise, which the next audit flags.
+ownit() {
+  if (( EUID == 0 )) && [[ $REAL_USER != "root" ]]; then
+    chown -h "$REAL_USER:$(id -gn "$REAL_USER")" "$1" 2>/dev/null || true
+  fi
+}
+
+ensure_dir() {
+  if [[ ! -d $1 ]]; then
+    mkdir -p "$1"
+    ownit "$1"
+  fi
+}
+
+# Run a command as the real user with their HOME. Root-only steps never go
+# through here; user steps (theme sync, live checks) always do.
+as_user() {
+  if (( EUID == 0 )) && [[ $REAL_USER != "root" ]]; then
+    sudo -u "$REAL_USER" env HOME="$REAL_HOME" "$@"
+  else
+    "$@"
+  fi
+}
 
 # ---------------------------------------------------------------- checks
 
@@ -58,9 +101,8 @@ check_compositor() {
   fi
 }
 
-# Packages the desktop needs. Anything already installed is left alone; nothing
-# here is installed automatically, because which of these you actually want is
-# a choice, not a side effect of running a script.
+# Packages the desktop needs. The installer puts these in with pacman; the
+# check below only reports, so a --check on a fresh machine reads as a list.
 #
 # These are package names, not binary names. pactl in particular ships in
 # libpulse, so listing "pactl" here would report a missing package on a machine
@@ -114,6 +156,8 @@ REQUIRED_PACKAGES=(
   fastfetch
   # Removable media
   udiskie
+  # The Caps Lock remap.
+  keyd
   # The full Nerd Font weight set, not -basic.
   #
   # ttf-jetbrains-mono-nerd-basic carries only Regular/Bold/Italic/BoldItalic.
@@ -124,13 +168,13 @@ REQUIRED_PACKAGES=(
   ttf-jetbrains-mono-nerd
 )
 
-check_packages() {
+missing_packages() {
   local missing=()
   local seen=()
   local pkg
   for pkg in "${REQUIRED_PACKAGES[@]}"; do
     # Skip repeats, so a duplicate in the list above cannot show up twice in
-    # the suggested install line.
+    # the install line.
     local duplicate=0
     local s
     for s in "${seen[@]}"; do
@@ -141,15 +185,22 @@ check_packages() {
 
     pacman -Qq "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
   done
+  printf '%s\n' "${missing[@]}"
+}
 
-  if ((${#missing[@]} == 0)); then
+check_packages() {
+  local missing=()
+  mapfile -t missing < <(missing_packages)
+
+  if ((${#missing[@]} == 0)) || [[ -z ${missing[0]} ]]; then
     info "all required packages installed"
     return
   fi
 
   warn "missing packages:"
   printf '    %s\n' "${missing[@]}"
-  printf '    install with: sudo pacman -S --needed %s\n' "${missing[*]}" >&2
+  printf '    install with: sudo ./install.sh\n' >&2
+  printf '    or by hand: sudo pacman -S --needed %s\n' "${missing[*]}" >&2
 }
 
 # Where each piece is going, and whether something is already there.
@@ -177,11 +228,11 @@ check_kitty_config() {
 
 # keyd: Caps Lock as Escape with vim keys under it.
 #
-# This is a system file, not a user one, so it needs root and it is the one
-# thing in this repo that writes outside the home directory. It also cannot be
-# tested the way everything else can: getting a keymap wrong locks you out of
-# your own machine until you fix it from a TTY, so the check below is about
-# refusing a bad file rather than installing it.
+# This is a system file, not a user one, which is half the reason the
+# installer runs with sudo. It also cannot be tested the way everything else
+# can: getting a keymap wrong locks you out of your own machine until you fix
+# it from a TTY, so the check below is about refusing a bad file rather than
+# installing it.
 KEYD_CONF=/etc/keyd/default.conf
 
 # Parse the file before installing it. keyd has no --check, and a config that
@@ -216,7 +267,7 @@ keyd_conf_valid() {
 check_keyd() {
   if ! command -v keyd >/dev/null 2>&1; then
     warn "keyd is not installed, so the Caps Lock remap will not apply."
-    warn "Install: sudo pacman -S keyd"
+    warn "The installer puts it in with the rest of the packages."
     return
   fi
 
@@ -239,12 +290,6 @@ check_keyd() {
 }
 
 install_keyd() {
-  if ! command -v keyd >/dev/null 2>&1; then
-    warn "keyd not installed; skipping the Caps Lock remap"
-    warn "Fix later with: sudo pacman -S keyd && sudo keyd reload"
-    return 1
-  fi
-
   if ! keyd_conf_valid "$REPO_DIR/keyd.conf"; then
     warn "keyd.conf does not parse; not installing it"
     return 1
@@ -261,13 +306,15 @@ install_keyd() {
       return 1
     }
     info "kept your previous keymap at $KEYD_CONF.bak"
+  else
+    ensure_dir "$(dirname "$KEYD_CONF")"
   fi
 
-  if ! install -m 644 "$REPO_DIR/keyd.conf" "$KEYD_CONF"; then
-    warn "could not write $KEYD_CONF. Without root this cannot be installed."
-    warn "Do it by hand: sudo install -m 644 keyd.conf $KEYD_CONF && sudo keyd reload"
+  install -m 644 "$REPO_DIR/keyd.conf" "$KEYD_CONF" || {
+    warn "could not write $KEYD_CONF"
     return 1
-  fi
+  }
+  info "keyd config written to $KEYD_CONF"
 
   # Re-read rather than restart: restarting keyd drops every held key, and a
   # reload does not.
@@ -301,11 +348,14 @@ check_layout() {
 
 # The macOS Apple cursor. https://github.com/ful1e5/apple_cursor, GPL-3.0.
 #
-# Not a pacman package in the official repos, so a new machine has no cursor at
-# all and falls back to the default arrow with nothing in the logs. The AUR
-# package is the easy path; the release tarball is the dependency-free one.
+# Vendored in cursors/macOS/, so a fresh machine needs no AUR helper and no
+# network fetch: the installer copies it system-wide. The theme is an Xcursor
+# theme, not a hyprcursor one — cursors/ and cursor.theme, with no
+# hyprcursors/ or theme.conf. libhyprcursor falls back to its Xcursor loader
+# for exactly this case, so the name still resolves.
 CURSOR_THEME_NAME="macOS"
-CURSOR_SOURCE_URL="https://github.com/ful1e5/apple_cursor/releases/latest/download/macOS.tar.gz"
+CURSOR_SOURCE_DIR="$REPO_DIR/cursors/$CURSOR_THEME_NAME"
+CURSOR_SYSTEM_DIR="/usr/share/icons/$CURSOR_THEME_NAME"
 
 cursor_installed() {
   local dir
@@ -323,58 +373,34 @@ check_cursor() {
     return
   fi
 
-  warn "$CURSOR_THEME_NAME cursor theme not found. The pointer will be the"
-  warn "default arrow everywhere, because a native Wayland app has no cursor of"
-  warn "its own and the compositor draws it from gsettings."
-  warn ""
-  warn "Either install the AUR package:"
-  warn "  paru -S apple_cursor"
-  warn ""
-  warn "Or fetch the release tarball and unpack it into ~/.local/share/icons:"
-  warn "  curl -L $CURSOR_SOURCE_URL \\"
-  warn "    | tar -xz -C ~/.local/share/icons"
+  if [[ -r $CURSOR_SOURCE_DIR/index.theme ]]; then
+    info "$CURSOR_THEME_NAME cursor theme will be installed from the repo copy"
+    return
+  fi
+
+  warn "$CURSOR_THEME_NAME cursor theme not found and the repo copy is missing."
+  warn "The pointer will be the default arrow everywhere, because a native"
+  warn "Wayland app has no cursor of its own and the compositor draws it from"
+  warn "gsettings."
 }
 
-# Install it if missing. Uses whichever of an AUR helper, the tarball, or
-# nothing is available, in that order, and never fails the install: a missing
-# cursor is a cosmetic problem, and refusing to finish over one would be worse.
+# Copy it system-wide if missing. Never fatal: a missing cursor is cosmetic,
+# and refusing to finish over one would be worse.
 install_cursor() {
   cursor_installed && {
     info "$CURSOR_THEME_NAME cursor theme already installed"
     return 0
   }
 
-  local helper=""
-  for candidate in paru yay pikaur trizen; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-      helper="$candidate"
-      break
-    fi
-  done
-
-  if [[ -n $helper ]]; then
-    info "installing the $CURSOR_THEME_NAME cursor theme with $helper"
-    if "$helper" -S --needed --noconfirm apple_cursor; then
-      return 0
-    fi
-    warn "$helper failed; falling back to the release tarball"
+  if [[ ! -r $CURSOR_SOURCE_DIR/index.theme ]]; then
+    warn "no vendored cursor at $CURSOR_SOURCE_DIR; skipping the cursor theme"
+    return 1
   fi
 
-  if command -v curl >/dev/null 2>&1; then
-    mkdir -p "$HOME/.local/share/icons"
-    info "fetching the $CURSOR_THEME_NAME cursor theme from the release tarball"
-    if curl -fsSL "$CURSOR_SOURCE_URL" | tar -xz -C "$HOME/.local/share/icons"; then
-      return 0
-    fi
-    warn "could not fetch $CURSOR_SOURCE_URL"
-  else
-    warn "no AUR helper and no curl; skipping the cursor theme"
-  fi
-
-  warn ""
-  warn "The cursor theme is missing. Install it with:"
-  warn "  paru -S apple_cursor"
-  return 1
+  rm -rf "$CURSOR_SYSTEM_DIR"
+  cp -a "$CURSOR_SOURCE_DIR" "$CURSOR_SYSTEM_DIR"
+  info "$CURSOR_THEME_NAME cursor theme installed system-wide from the repo"
+  return 0
 }
 
 check_fonts() {
@@ -391,7 +417,7 @@ check_fonts() {
     # The bar, the lock screen and the terminal all reference this family, and
     # without it the Nerd Font glyphs render as tofu boxes rather than icons.
     warn "JetBrainsMono Nerd Font not found. Icons will show as empty boxes."
-    warn "Install: sudo pacman -S ttf-jetbrains-mono-nerd"
+    warn "The installer puts it in with the rest of the packages."
     return
   fi
   info "jetbrains-mono-nerd present"
@@ -409,6 +435,47 @@ check_fonts() {
   fi
 }
 
+# OpenCode: the global config, working rules, commands and skills live in
+# opencode/ in the repo and are symlinked into ~/.config/opencode/.
+#
+# Two files are deliberately never touched: cli.json (TUI preferences, machine
+# taste) and service.json (holds an auth secret — never vendored, never
+# linked, never overwritten).
+check_opencode() {
+  local dir="$HOME/.config/opencode"
+  local missing=()
+  local name
+  for name in opencode.json AGENTS.md commands skills; do
+    if [[ -L $dir/$name ]] &&
+      [[ "$(readlink -f "$dir/$name")" == "$(readlink -f "$REPO_DIR/opencode/$name")" ]]; then
+      continue
+    fi
+    missing+=("$name")
+  done
+
+  if ((${#missing[@]} == 0)); then
+    info "opencode config linked"
+  else
+    info "opencode config will be linked: ${missing[*]}"
+  fi
+
+  if ! command -v opencode >/dev/null 2>&1; then
+    warn "opencode is not installed (SUPER+A has nothing to launch)."
+    warn "Install: curl -fsSL https://opencode.ai/install | bash"
+  else
+    info "opencode present"
+  fi
+}
+
+check_vscode() {
+  local vscode_dir="$HOME/.config/Code/User"
+  if [[ -d $vscode_dir ]]; then
+    info "vscode config dir present"
+  else
+    info "no $vscode_dir; VS Code is not set up here, its theme will be skipped"
+  fi
+}
+
 if ((check_only)); then
   step "archy check"
   check_compositor
@@ -417,21 +484,34 @@ if ((check_only)); then
   check_cursor
   check_kitty_config
   check_keyd
+  check_opencode
+  check_vscode
   check_layout
   step ""
-  echo "Nothing was changed. Run without --check to install."
+  echo "Nothing was changed. Run with sudo to install: sudo ./install.sh"
   exit 0
 fi
 
 # ---------------------------------------------------------------- install
 
-step "archy install"
+step "archy install (as $REAL_USER)"
 
-mkdir -p "$HYPR_HOME" "$BIN_DIR" 2>/dev/null
+# The desktop packages first. --needed leaves what is already there alone;
+# --noconfirm keeps a fresh-machine install unattended.
+mapfile -t to_install < <(missing_packages)
+if ((${#to_install[@]} == 0)) || [[ -z ${to_install[0]} ]]; then
+  info "all required packages installed"
+else
+  pacman -S --needed --noconfirm "${to_install[@]}"
+  info "packages installed: ${to_install[*]}"
+fi
+
+ensure_dir "$HYPR_HOME"
+ensure_dir "$BIN_DIR"
 
 link_or_report() {
   local target="$1" link="$2" label="$3"
-  mkdir -p "$(dirname "$link")" 2>/dev/null
+  ensure_dir "$(dirname "$link")"
 
   if [[ -L $link ]]; then
     local current
@@ -451,6 +531,7 @@ link_or_report() {
   fi
 
   ln -s "$target" "$link"
+  ownit "$link"
   info "$label -> $target"
 }
 
@@ -467,6 +548,7 @@ if [[ -d $HYPR_HOME && ! -L $HYPR_HOME ]]; then
 else
   rm -rf "$HYPR_HOME"
   ln -s "$REPO_DIR/hypr" "$HYPR_HOME"
+  ownit "$HYPR_HOME"
   info "hypr -> $REPO_DIR/hypr"
 fi
 
@@ -476,6 +558,7 @@ for script in "$REPO_DIR"/scripts/archy-*; do
   [[ -f $script ]] || continue
   name="$(basename "$script")"
   ln -sf "$script" "$BIN_DIR/$name"
+  ownit "$BIN_DIR/$name"
 done
 chmod +x "$REPO_DIR"/scripts/archy-* 2>/dev/null
 info "scripts -> $BIN_DIR (${name:-none})"
@@ -490,7 +573,7 @@ link_or_report "$REPO_DIR/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf" "ki
 # copy and the expected location.
 link_or_report "$REPO_DIR/hypr/Xresources" "$HOME/.Xresources" "Xresources"
 
-# The cursor, if it is not already here. Never fatal.
+# The cursor, from the vendored copy. Never fatal.
 step "cursor"
 install_cursor || true
 
@@ -511,6 +594,7 @@ if [[ -e "$HOME/.bashrc" ]]; then
   fi
 else
   ln -s "$REPO_DIR/bashrc" "$HOME/.bashrc"
+  ownit "$HOME/.bashrc"
   info "bashrc -> $REPO_DIR/bashrc"
 fi
 
@@ -525,7 +609,7 @@ link_or_report "$REPO_DIR/starship/starship.toml" "$HOME/.config/starship.toml" 
 if [[ -d "$REPO_DIR/vscode" ]]; then
   vscode_dir="$HOME/.config/Code/User"
   if [[ -d $vscode_dir ]]; then
-    mkdir -p "$HOME/.vscode/extensions" 2>/dev/null
+    ensure_dir "$HOME/.vscode/extensions"
     ext_link="$HOME/.vscode/extensions/archy-theme"
     if [[ -L $ext_link ]]; then
       if [[ "$(readlink -f "$ext_link")" == "$(readlink -f "$REPO_DIR/vscode")" ]]; then
@@ -533,12 +617,14 @@ if [[ -d "$REPO_DIR/vscode" ]]; then
       else
         rm -f "$ext_link"
         ln -s "$REPO_DIR/vscode" "$ext_link"
+        ownit "$ext_link"
         info "vscode theme -> $REPO_DIR/vscode"
       fi
     elif [[ -e $ext_link ]]; then
       warn "$ext_link exists and is not a symlink; leaving it"
     else
       ln -s "$REPO_DIR/vscode" "$ext_link"
+      ownit "$ext_link"
       info "vscode theme -> $REPO_DIR/vscode"
     fi
     link_or_report "$REPO_DIR/vscode/settings.json" "$vscode_dir/settings.json" "vscode settings"
@@ -554,7 +640,7 @@ link_or_report "$REPO_DIR/fastfetch/config.jsonc" "$HOME/.config/fastfetch/confi
 # The logo directory is linked as a whole, so adding another logo is a matter of
 # dropping it in the repo and re-running the installer.
 if [[ -d "$REPO_DIR/fastfetch/logo" ]]; then
-  mkdir -p "$HOME/.config/fastfetch" 2>/dev/null
+  ensure_dir "$HOME/.config/fastfetch"
   logo_link="$HOME/.config/fastfetch/logo"
   if [[ -L $logo_link ]]; then
     if [[ "$(readlink -f "$logo_link")" == "$(readlink -f "$REPO_DIR/fastfetch/logo")" ]]; then
@@ -562,35 +648,58 @@ if [[ -d "$REPO_DIR/fastfetch/logo" ]]; then
     else
       rm -f "$logo_link"
       ln -s "$REPO_DIR/fastfetch/logo" "$logo_link"
+      ownit "$logo_link"
       info "fastfetch logos -> $REPO_DIR/fastfetch/logo"
     fi
   elif [[ -e $logo_link ]]; then
     warn "$logo_link exists and is not a symlink; leaving it"
   else
     ln -s "$REPO_DIR/fastfetch/logo" "$logo_link"
+    ownit "$logo_link"
     info "fastfetch logos -> $REPO_DIR/fastfetch/logo"
   fi
 fi
 
-# keyd: the one thing here that writes outside the home directory. After this
-# point the keyboard remap is live, so it is deliberately the last step that
-# changes system state.
+# OpenCode. The config, rules, commands and skills are symlinked in; cli.json
+# and service.json stay machine-local and are never touched.
+if [[ -d "$REPO_DIR/opencode" ]]; then
+  ensure_dir "$HOME/.config/opencode"
+  link_or_report "$REPO_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json" "opencode config"
+  link_or_report "$REPO_DIR/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md" "opencode rules"
+  link_or_report "$REPO_DIR/opencode/commands" "$HOME/.config/opencode/commands" "opencode commands"
+  link_or_report "$REPO_DIR/opencode/skills" "$HOME/.config/opencode/skills" "opencode skills"
+fi
+
+# keyd: the system keyboard remap. After this point it is live, so it is
+# deliberately the last step that changes system state.
 step "keyd"
 install_keyd || true
 
-# Generate the stylesheets from the current colors file.
+# Generate the stylesheets from the current colors file. This runs as the real
+# user: generated/ lives in their checkout, and root-owned files there would
+# break the next theme change.
 if [[ -x $BIN_DIR/archy-theme ]]; then
-  "$BIN_DIR/archy-theme" sync && info "generated stylesheets"
+  if as_user "$BIN_DIR/archy-theme" sync; then
+    info "generated stylesheets"
+  else
+    warn "archy-theme sync failed"
+  fi
 else
   warn "archy-theme not runnable yet; generated/ will be empty."
 fi
 
+# The live checks need the user's session (hyprctl, fonts, home paths), so
+# re-run the read-only check as them rather than as root.
 step "archy checks"
-check_compositor
-check_fonts
-check_cursor
-check_kitty_config
-check_keyd
+if (( EUID == 0 )) && [[ $REAL_USER != "root" ]]; then
+  sudo -u "$REAL_USER" env HOME="$REAL_HOME" \
+    ${HYPRLAND_INSTANCE_SIGNATURE:+HYPRLAND_INSTANCE_SIGNATURE="$HYPRLAND_INSTANCE_SIGNATURE"} \
+    ${XDG_RUNTIME_DIR:+XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR"} \
+    ${WAYLAND_DISPLAY:+WAYLAND_DISPLAY="$WAYLAND_DISPLAY"} \
+    "$REPO_DIR/install.sh" --check
+else
+  "$REPO_DIR/install.sh" --check
+fi
 
 step ""
 echo "Installed to $ARCHY_HOME"

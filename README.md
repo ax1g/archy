@@ -41,8 +41,8 @@ A few of these are not the obvious choice, so the reasoning is here:
    `cursor:sync_gsettings_theme` is on. Both are in `hypr/cursor.lua`, which is
    the only file to touch to change it. The theme is from
    [apple_cursor](https://github.com/ful1e5/apple_cursor) (GPL-3.0) and is not
-   an official package, so `install.sh` puts it in place if it is missing:
-   AUR helper first, release tarball as the fallback.
+   an official package, so it is vendored in `cursors/` and `install.sh`
+   copies it system-wide.
 
 3. Wofi handles the notification actions. mako draws the notification and hands
    the buttons to wofi, so there is one overlay style instead of two.
@@ -80,32 +80,23 @@ A few of these are not the obvious choice, so the reasoning is here:
 ## Setting up a new machine
 
 ```sh
-sudo pacman -S --needed \
-  hyprland hyprlang hyprcursor hypridle hyprlock hyprsunset hyprpolkitagent \
-  waybar wofi mako kitty wtype \
-  grim slurp hyprpicker gpu-screen-recorder wl-clipboard cliphist \
-  libpulse wireplumber playerctl \
-  xdg-desktop-portal xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
-  swww udiskie jq \
-  ttf-jetbrains-mono-nerd
-```
-
-Then:
-
-```sh
 git clone https://github.com/ax1g/archy ~/archy
 cd ~/archy
-./scripts/install.sh --check     # reports what is missing, changes nothing
-./scripts/install.sh
+./install.sh --check     # reports what is missing, changes nothing
+sudo ./install.sh
 ```
 
-`install.sh` symlinks the checkout to `~/.config/archy`, symlinks `hypr/` to
-`~/.config/hypr`, links the scripts into `~/.local/bin`, links `Xresources` to
-`~/.Xresources`, installs the cursor theme if it is missing, and generates the
-stylesheets. It is idempotent, so after every `git pull`:
+`install.sh` runs with sudo: it installs the pacman packages the desktop
+needs, writes the keyd config and the system-wide cursor theme, then links
+the user config as the real user. Concretely it symlinks the checkout to
+`~/.config/archy`, symlinks `hypr/` to `~/.config/hypr`, links the scripts
+into `~/.local/bin`, links `Xresources` to `~/.Xresources`, links the
+OpenCode config into `~/.config/opencode`, installs the vendored cursor
+theme, and generates the stylesheets. It is idempotent, so after every
+`git pull`:
 
 ```sh
-git -C ~/archy pull && ~/archy/scripts/install.sh
+git -C ~/archy pull && sudo ~/archy/install.sh
 ```
 
 If `~/.config/hypr` is already a real directory the installer leaves it alone
@@ -121,16 +112,10 @@ deliberately rather than by accident. The section at the bottom lists the ones
 that will actually break: the kernel package and the neovim config.
 
 **Cursor.** The macOS Apple cursor, which is not an official package, so
-nothing installs it by default. `install.sh` fetches it when it is missing —
-AUR helper if there is one, otherwise the release tarball — and never fails the
-install over it, because a missing cursor is cosmetic. To do it by hand:
-
-```sh
-paru -S apple_cursor
-# or
-curl -L https://github.com/ful1e5/apple_cursor/releases/latest/download/macOS.tar.gz \
-  | tar -xz -C ~/.local/share/icons
-```
+nothing installs it by default. It is vendored in `cursors/` (GPL-3.0, with
+its license alongside it) and `install.sh` copies it to
+`/usr/share/icons/macOS`, so a fresh machine needs no AUR helper and no
+network fetch for the pointer.
 
 `install.sh --check` looks for `index.theme` inside the theme directory, since
 that is what fontconfig reads — a directory of cursor files without it does not
@@ -154,6 +139,7 @@ duplicates an installed package will shadow it. Delete the local copy and run
 
 ```
 archy/
+├── install.sh           the installer; run with sudo
 ├── hypr/                  the config, loaded through hyprland.lua
 │   ├── hyprland.lua       entry point and load order
 │   ├── helpers.lua        the o.* layer over Hyprland's hl.* API
@@ -176,6 +162,8 @@ archy/
 │   ├── colors.conf        the theme file
 │   └── themes/            alternates, picked with SUPER+SHIFT+T
 ├── bashrc                 interactive shell
+├── opencode/              opencode config, rules, commands, skills
+├── cursors/               vendored macOS pointer (GPL-3.0)
 ├── vscode/                editor theme (local extension) and settings
 ├── starship/starship.toml prompt
 ├── kitty/kitty.conf       terminal

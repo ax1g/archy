@@ -12,7 +12,7 @@
 # To install everything here:
 #   pacman -S --needed $(grep -vE '^\s*(#|$)' apps.txt | awk '{print $1}' | tr '\n' ' ')
 #
-# This is not what archy needs to run; scripts/install.sh covers that. This is
+# This is not what archy needs to run; install.sh covers that. This is
 # what I use.
 
 
@@ -129,9 +129,9 @@ papirus-icon-theme
 
 ## Install by hand, not from pacman
 
-apple_cursor          the macOS pointer, GPL-3.0. Not in any Arch repo.
-                      install.sh fetches it from the release tarball when it is
-                      missing, so a plain install gets it.
+apple_cursor          the macOS pointer, GPL-3.0. Not in any Arch repo, so
+                      it is vendored in cursors/ and install.sh copies it to
+                      /usr/share/icons. Nothing to install by hand.
 
 rust toolchain        rustup installs the toolchain into ~/.rustup, which is a
                       separate download from the rustup package itself.
@@ -173,7 +173,7 @@ neovim config          my configuration is a plugin and keybind setup, not a
                       own; archy has no opinion about it and it is not listed
                       here because there is nothing to install.
 
-macOS pointer          apple_cursor is in a repository I do not use and is
-                      fetched as a tarball instead. It is GPL-3.0, so vendoring
-                      it into this repo is not something I can do quietly.
+macOS pointer          apple_cursor is in no Arch repo, so it is vendored
+                      in cursors/ with its GPL-3.0 license and installed
+                      system-wide by install.sh. No manual step.
 
