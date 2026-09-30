@@ -211,8 +211,13 @@ else
   fi
 
   # Every name that is meant to be installable has to exist, or the one-liner in
-  # the header fails on a typo. Two are expected to fail: they are documented as
-  # manual installs in their own section.
+  # the header fails on a typo. One is expected to fail: the pointer, which is
+  # documented as a manual install in its own section.
+  #
+  # The four tools that come from a cargo build or a repository that is going
+  # away are deliberately not listed as package entries. They are named in the
+  # manual section instead, because listing them here would make a
+  # `pacman -S` line for them, and they cannot be installed that way.
   manual="apple_cursor"
   unexpected=()
   total=0
@@ -526,6 +531,33 @@ PY
   name="$(python3 -c "import json;print(json.load(open('$REPO_DIR/vscode/package.json'))['name'])")"
   info "installs as $pub.$name -> ~/.vscode/extensions/archy-theme"
 fi
+
+step "autostart dependencies"
+# Every program autostart.lua launches has to exist. These are fire-and-forget
+# exec_cmd calls, so a missing one produces no error anywhere: the session comes
+# up and something is simply absent until you go looking for it. The polkit
+# agent is the worst case, because the only symptom is that nothing asks for a
+# password.
+missing_progs=""
+for prog in waybar mako hypridle hyprlock hyprsunset hyprpicker wofi swww \
+            kitty playerctl hyprpolkitagent udiskie; do
+  command -v "$prog" >/dev/null 2>&1 || missing_progs+="$prog "
+done
+if [[ -n $missing_progs ]]; then
+  info "not installed here, so the autostart line for these is inert: $missing_progs"
+  info "install.sh lists them; on a new machine that is the fix"
+else
+  info "every autostarted program is present"
+fi
+
+# Each one autostart.lua launches should also be named in the installer's
+# package list, or a fresh machine will not have it.
+for prog in waybar mako hypridle hyprlock hyprsunset swww hyprpolkitagent udiskie; do
+  if ! grep -qE "^[[:space:]]+$prog\$" "$REPO_DIR/scripts/install.sh"; then
+    fail "autostart launches $prog but install.sh does not list it"
+  fi
+done
+info "autostarted programs are all in the installer's package list"
 
 step "packages"
 "$REPO_DIR/scripts/install.sh" --check 2>&1 | sed 's/^/  /'

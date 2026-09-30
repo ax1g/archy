@@ -54,7 +54,18 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("/usr/lib/xdg-desktop-portal-gtk &")
 
   -- Polkit: the password prompt for mounting, network settings and power.
-  hl.exec_cmd("hyprpolkitagent")
+  --
+  -- There is no polkit configuration to install. Every permission here is stock
+  -- (packagekit for mounting, NetworkManager for connections, logind for power)
+  -- and no rules.d entry is needed; this is only the agent that draws the
+  -- dialog.
+  --
+  -- Guarded, because a missing agent is otherwise invisible: the session comes
+  -- up clean and the first sign of it is that mounting a drive does nothing and
+  -- never asks for a password.
+  hl.exec_cmd("command -v hyprpolkitagent >/dev/null || notify-send -u critical " ..
+    "'Polkit agent missing' 'install hyprpolkitagent, or nothing will ask for a password'")
+  hl.exec_cmd("hyprpolkitagent 2>/dev/null")
 
   -- Nightlight, on the identity profile from hyprsunset.conf.
   hl.exec_cmd("hyprsunset -c " .. o.home .. "/.config/archy/hypr/hyprsunset.conf")

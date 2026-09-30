@@ -139,13 +139,17 @@ rust toolchain        rustup installs the toolchain into ~/.rustup, which is a
 ytkew                  a cargo install, not a package. Lives in ~/.cargo/bin.
 
 zen, chrome            the browsers the keybinds use, from the repository that
-                      is going away. firefox and chromium are in extra and are
-                      listed above, so swapping the SUPER+B binding to one of
-                      them is the whole fix. Until it is swapped, those two keys
-                      and SUPER+M (cliamp) are the bindings that will break.
+                      is going away. Installed by hand and kept, so SUPER+B and
+                      SUPER+SHIFT+B still work. firefox and chromium are in extra
+                      and are listed above as the fallbacks.
 
 cliamp                 a cargo install from the same repository, and the target
-                      of SUPER+M. Same situation.
+                      of SUPER+M. Installed by hand and kept.
+
+These four are not on a machine that is only following this file: they come from
+a cargo build or a repository that goes away, and nothing in the repos
+reinstalls them. Reinstalling is part of setting up a new machine, alongside the
+kernel swap noted above.
 
 
 ## Decisions, not packages
