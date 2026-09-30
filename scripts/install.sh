@@ -518,6 +518,35 @@ fi
 # symlink is safe here.
 link_or_report "$REPO_DIR/starship/starship.toml" "$HOME/.config/starship.toml" "starship.toml"
 
+# The VS Code theme, as a local extension. VS Code loads anything unpacked
+# under ~/.vscode/extensions, so this is a directory symlink rather than a
+# package install. Without it, settings.json names a theme that does not exist
+# and the editor falls back to its own dark with no error.
+if [[ -d "$REPO_DIR/vscode" ]]; then
+  vscode_dir="$HOME/.config/Code/User"
+  if [[ -d $vscode_dir ]]; then
+    mkdir -p "$HOME/.vscode/extensions" 2>/dev/null
+    ext_link="$HOME/.vscode/extensions/archy-theme"
+    if [[ -L $ext_link ]]; then
+      if [[ "$(readlink -f "$ext_link")" == "$(readlink -f "$REPO_DIR/vscode")" ]]; then
+        info "vscode theme already linked"
+      else
+        rm -f "$ext_link"
+        ln -s "$REPO_DIR/vscode" "$ext_link"
+        info "vscode theme -> $REPO_DIR/vscode"
+      fi
+    elif [[ -e $ext_link ]]; then
+      warn "$ext_link exists and is not a symlink; leaving it"
+    else
+      ln -s "$REPO_DIR/vscode" "$ext_link"
+      info "vscode theme -> $REPO_DIR/vscode"
+    fi
+    link_or_report "$REPO_DIR/vscode/settings.json" "$vscode_dir/settings.json" "vscode settings"
+  else
+    warn "no $vscode_dir; VS Code is not set up here, skipping its theme"
+  fi
+fi
+
 # fastfetch. The config is a real file rather than generated, so this is a
 # symlink and the repo copy stays the one that gets edited.
 link_or_report "$REPO_DIR/fastfetch/config.jsonc" "$HOME/.config/fastfetch/config.jsonc" "fastfetch config"

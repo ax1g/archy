@@ -51,7 +51,14 @@ A few of these are not the obvious choice, so the reasoning is here:
    is a child of the compositor rather than a systemd scope. If I ever want
    scoped units, it goes back in `o.launch` in `hypr/helpers.lua`.
 
-5. The bashrc here is a rewrite, not a copy. The one it replaces was nine lines
+5. The VS Code theme is a local extension in `vscode/`, not a marketplace one.
+   It was a generated extension that the old setup rewrote on every theme
+   change, and it existed nowhere to be reinstalled from, so it is now vendored
+   and renamed: 664 colors and 81 token rules, same palette, and
+   `workbench.colorTheme` in the settings points at it. Like the prompt, it is
+   static — a theme switch does not rewrite it.
+
+6. The bashrc here is a rewrite, not a copy. The one it replaces was nine lines
    long and two of them sourced a defaults file for aliases, completions and
    functions, so copying it verbatim would have left an interactive shell with
    almost nothing in it. What is in `bashrc` is an equivalent written out: the
@@ -66,7 +73,7 @@ A few of these are not the obvious choice, so the reasoning is here:
    command to adopt the repo's copy, because the file on a real machine holds
    exports that are not in any repo.
 
-6. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
+7. The config is Lua, not hyprlang. Hyprland 0.56 takes either, and the
    cascade, the clipboard chords and the region picker's transient bindings are
    stateful enough that imperative code is clearer than the declarative form.
 
@@ -169,6 +176,7 @@ archy/
 │   ├── colors.conf        the theme file
 │   └── themes/            alternates, picked with SUPER+SHIFT+T
 ├── bashrc                 interactive shell
+├── vscode/                editor theme (local extension) and settings
 ├── starship/starship.toml prompt
 ├── kitty/kitty.conf       terminal
 ├── apps.txt               what I actually use, and what to replace

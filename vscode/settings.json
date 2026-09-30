@@ -1,0 +1,117 @@
+{
+    "workbench.layoutControl.enabled": false,
+    "workbench.browser.showInTitleBar": false,
+    "window.commandCenter": false,
+    "window.titleBarStyle": "native",
+    "window.controlsStyle": "hidden",
+    "editor.scrollbar.verticalScrollbarSize": 4,
+    "rust-analyzer.lens.run.enable": false,
+    "rust-analyzer.lens.debug.enable": false,
+    "editor.scrollbar.horizontalScrollbarSize": 4,
+    "workbench.experimental.modernUI": true,
+    "chat.titleBar.openInAgentsWindow.enabled": false,
+    "chat.commandCenter.enabled": false,
+    "chat.agentsControl.enabled": "hidden",
+    "chat.agentStatusControl.enabled": "hidden",
+    "chat.unifiedAgentsBar.enabled": false,
+    "editor.formatOnSave": true,
+    "workbench.startupEditor": "none",
+    "qt-qml.doNotAskForQmllsDownload": true,
+    "workbench.iconTheme": "material-icon-theme",
+    "workbench.panel.showLabels": false,
+    "editor.fontFamily": "'JetBrainsMono Nerd Font', monospace",
+    "editor.fontWeight": "500",
+    "terminal.integrated.fontLigatures.enabled": true,
+    "terminal.integrated.shellIntegration.enabled": false,
+    "workbench.tips.enabled": false,
+    "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font', monospace",
+    "terminal.integrated.fontWeight": "500",
+    "workbench.secondarySideBar.showLabels": false,
+    "workbench.secondarySideBar.defaultVisibility": "hidden",
+    "workbench.colorTheme": "archy",
+    "editor.tokenColorCustomizations": {
+        "[Tokyo Night]": {
+            "textMateRules": [
+                {
+                    "scope": [
+                        "string",
+                        "constant.other.symbol",
+                        "constant.other.key",
+                        "meta.attribute-selector",
+                        "string constant.character",
+                        "support.constant.font-name",
+                        "entity.other.attribute-name.class"
+                    ],
+                    "settings": {
+                        "foreground": "#23ad5c"
+                    }
+                }
+            ]
+        }
+    },
+    "editor.stickyScroll.enabled": false,
+    "breadcrumbs.enabled": false,
+    "terminal.integrated.stickyScroll.enabled": false,
+    "window.menuStyle": "custom",
+    "explorer.confirmDelete": false,
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "github.copilot.enable": {
+        "*": false,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false,
+        "python": false
+    },
+    "explorer.confirmDragAndDrop": false,
+    "workbench.browser.searchEngine": "google",
+    "editor.snippets.codeActions.enabled": false,
+    "editor.wordWrap": "on",
+    "terminal.integrated.smoothScrolling": true,
+    "vim.useSystemClipboard": true,
+    "terminal.integrated.fontSize": 13,
+    "workbench.statusBar.visible": false,
+    "window.newWindowProfile": "Default",
+    "[qml]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "TheQtCompany.qt-qml"
+    },
+    "workbench.editorAssociations": {
+        "*.copilotmd": "vscode.markdown.preview.editor",
+        "{git,gitlens,chat-editing-snapshot-text-model,copilot,git-graph,git-graph-3}:/**/*.qrc": "default",
+        "*.qrc": "qt-core.qrcEditor"
+    },
+    "qt-core.showWelcomePageOnActivation": false,
+    "update.titleBar": false,
+    "json.schemaDownload.trustedDomains": {
+        "https://schemastore.azurewebsites.net/": true,
+        "https://raw.githubusercontent.com/microsoft/vscode/": true,
+        "https://raw.githubusercontent.com/devcontainers/spec/": true,
+        "https://www.schemastore.org/": true,
+        "https://json.schemastore.org/": true,
+        "https://json-schema.org/": true,
+        "https://developer.microsoft.com/json-schemas/": true,
+        "https://biomejs.dev": true
+    },
+    "terminal.integrated.initialHint": false,
+    "python.languageServer": "Default",
+    "window.menuBarVisibility": "compact",
+    "docker.extension.dockerEngineAvailabilityPrompt": false,
+    "workbench.tree.enableStickyScroll": false,
+    "workbench.tree.renderIndentGuides": "always",
+    "python.analysis.typeCheckingMode": "standard",
+    "workbench.editor.empty.hint": "hidden",
+    "window.zoomLevel": 1,
+    "settingsSync.ignoredSettings": [
+        "-window.zoomLevel"
+    ],
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true
+    },
+    "search.exclude": {
+        "**/__pycache__": true
+    },
+    "editor.allowVariableFonts": false,
+    "window.customTitleBarVisibility": "never",
+    "workbench.activityBar.compact": true
+}

@@ -19,7 +19,6 @@
 ## Terminal and shell
 
 kitty                  terminal, ExtraLight at 11.5, see kitty/kitty.conf
-foot                   second terminal, for when kitty's config is the problem
 bash                   login shell
 starship               prompt
 tmux                   persistent sessions
@@ -41,7 +40,8 @@ inotify-tools          for scripts that watch files
 
 ## Editor
 
-code                   VS Code, the Arch build
+code                   VS Code, the Arch build. Its theme is a local extension in
+                      the repo, not a marketplace one, so nothing to install for it
 neovim
 vim                    for a quick edit over ssh
 tree-sitter-cli        parsers for nvim
@@ -52,19 +52,16 @@ tree-sitter-cli        parsers for nvim
 rustup                 toolchain manager, installs into ~/.cargo
 base-devel             gcc, make, headers
 clang, llvm
-deno
 bun
 uv                     python packaging and venvs, the fast one
 python
-ruby                   mainly for gems
 ollama                 local models
 
 
 ## Browsers
 
 firefox
-librewolf              hardened firefox, when I want the flags
-
+chromium
 
 ## Containers and databases
 
@@ -81,18 +78,15 @@ mpv                     video
 obs-studio              recording and streaming
 kdenlive                video editing
 pinta                   image editing
-imv                     image viewer, scriptable
 ffmpegthumbnailer       thumbnails in the file manager
 yt-dlp
 gpu-screen-recorder     screen recording
 cava                    audio visualizer
-tesseract, tesseract-data-eng   OCR
 
 
 ## Files and notes
 
 nautilus                file manager
-nautilus-python         scripting hook for it
 obsidian                notes
 qbittorrent              torrents
 qrencode, zbar          QR codes, encode and decode
@@ -102,8 +96,6 @@ qrencode, zbar          QR codes, encode and decode
 
 drawy                   drawing
 btop                    process and system monitor
-lazygit                 git tui
-
 
 ## System
 
@@ -115,7 +107,6 @@ btrfs-progs, exfatprogs, dosfstools
 zram-generator
 bluez, bluez-tools, bluez-utils
 pamixer, brightnessctl
-power-profiles-daemon   on battery vs plugged in
 hypridle, hyprlock, hyprsunset, hyprpicker
 xdg-desktop-portal, xdg-desktop-portal-hyprland, xdg-desktop-portal-gtk
 pipewire, pipewire-alsa, pipewire-jack, pipewire-pulse, wireplumber
@@ -145,6 +136,17 @@ apple_cursor          the macOS pointer, GPL-3.0. Not in any Arch repo.
 rust toolchain        rustup installs the toolchain into ~/.rustup, which is a
                       separate download from the rustup package itself.
 
+ytkew                  a cargo install, not a package. Lives in ~/.cargo/bin.
+
+zen, chrome            the browsers the keybinds use, from the repository that
+                      is going away. firefox and chromium are in extra and are
+                      listed above, so swapping the SUPER+B binding to one of
+                      them is the whole fix. Until it is swapped, those two keys
+                      and SUPER+M (cliamp) are the bindings that will break.
+
+cliamp                 a cargo install from the same repository, and the target
+                      of SUPER+M. Same situation.
+
 
 ## Decisions, not packages
 
@@ -153,7 +155,7 @@ places where something I used is not simply an Arch package any more, so each
 one needs a choice rather than an install command.
 
 browser               I have been using Zen, which only ever came from that
-                      repository. firefox and librewolf are the Arch
+                      repository. firefox and chromium are the Arch
                       equivalents and are listed above; if I want something
                       closer to what I had, there is nothing in extra that is,
                       and it stays a manual download.
@@ -171,13 +173,3 @@ macOS pointer          apple_cursor is in a repository I do not use and is
                       fetched as a tarball instead. It is GPL-3.0, so vendoring
                       it into this repo is not something I can do quietly.
 
-display tooling       asdcontrol for an Apple Studio Display, and ddcutil for
-                      panels that accept DDC/CI. Neither is in extra, and
-                      neither is used daily here, since this panel rejects
-                      DDC/CI and brightness goes through hyprsunset instead.
-
-local file transfer   LocalSend has no equivalent in extra. Not used daily,
-                      so it is not carrying anything.
-
-fonts                 ttfx was an installer for a font set. The individual
-                      font packages are listed above and cover it.

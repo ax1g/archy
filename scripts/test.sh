@@ -167,14 +167,13 @@ apps_file="$REPO_DIR/apps.txt"
 if [[ ! -f $apps_file ]]; then
   fail "apps.txt is missing"
 else
-  # Package entries only. Everything from "Decisions" down is prose whose
-  # headings start with words like "browser" and "vscode", which are not
+  # Package entries only. The sections from "Decisions" down are prose whose
+  # headings start with words like "browser" and "ytkew", which are not
   # packages, and a leak check that reads those is checking nothing.
   #
-  # An entry starts at column 1. A wrapped description is indented, so it must
-  # not be read as a new name: the second line of the apple_cursor entry starts
-  # with "install.sh", which would otherwise register as a missing package.
-  entries="$(awk '/^## Decisions/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
+  # Only lines starting in column 1 are entries; wrapped descriptions are
+  # indented, so the second line of a long entry does not register as a name.
+  entries="$(awk '/^## Install by hand/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
 
   leaked=()
   while read -r pkg; do
@@ -197,7 +196,7 @@ else
   # prose whose headings start with words that happen to be package names, like
   # "neovim config", and counting those is noise rather than duplication. Only
   # lines starting in column 1 are entries; wrapped descriptions are indented.
-  entries="$(awk '/^## Decisions/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
+  entries="$(awk '/^## Install by hand/{exit} /^[a-z0-9]/ {print}' "$apps_file")"
   dupes=""
   while read -r pkg; do
     [[ -n $pkg ]] || continue
@@ -438,6 +437,94 @@ if grep -qiE 'omarchy|local/state' "$REPO_DIR/starship/starship.toml"; then
   fail "starship.toml references the old setup"
 else
   info "starship.toml is self-contained"
+fi
+
+step "desktop only"
+# This is a desktop: one HDMI output, no eDP internal panel, no battery, no lid
+# switch. Anything that only works on a laptop is dead weight here, and a script
+# that silently exits 0 is worse than one that was never written, because it
+# looks like it is doing something.
+desktop_only=0
+
+if [[ -n $(ls /sys/class/power_supply/ 2>/dev/null) ]]; then
+  info "a battery is present, so battery-aware config would be reasonable"
+else
+  if compgen -G "$REPO_DIR/scripts/*battery*" >/dev/null; then
+    fail "a battery script exists but there is no battery"
+    desktop_only=1
+  fi
+  if grep -qiE '"type":[[:space:]]*"battery"' "$REPO_DIR/waybar/config.jsonc"; then
+    fail "waybar has a battery module but there is no battery"
+    desktop_only=1
+  fi
+  if grep -q "power-profiles-daemon" "$REPO_DIR/scripts/install.sh" "$REPO_DIR/apps.txt" 2>/dev/null; then
+    fail "power-profiles-daemon is listed but there is no battery to switch away from"
+    desktop_only=1
+  fi
+fi
+
+if ls /sys/class/power_supply/ 2>/dev/null | grep -q . || \
+   [[ -n $(hyprctl -j monitors 2>/dev/null | jq -r '.[].name | select(startswith("eDP-"))' 2>/dev/null) ]]; then
+  info "an internal panel is present, so clamshell handling would be reasonable"
+else
+  for gone in monitor-clamshell monitor-internal; do
+    if compgen -G "$REPO_DIR/scripts/archy-$gone" >/dev/null; then
+      fail "archy-$gone exists but there is no internal panel to switch"
+      desktop_only=1
+    fi
+  done
+  if grep -q "Lid Switch" "$REPO_DIR/hypr/bindings.lua"; then
+    fail "lid switch bindings exist but there is no lid switch"
+    desktop_only=1
+  fi
+fi
+
+((desktop_only == 0)) && info "no laptop-only config for a machine with no lid, panel or battery"
+
+step "vscode theme"
+# The theme name has to agree in three places: the label the extension
+# contributes, the name inside the theme file, and workbench.colorTheme in the
+# user settings. If they disagree VS Code falls back to its default dark and the
+# setting looks like it did nothing, so this is worth asserting rather than
+# eyeballing.
+if [[ ! -d "$REPO_DIR/vscode" ]]; then
+  fail "vscode/ is missing; settings.json would name a theme that is not there"
+else
+  # The heredoc terminator has to sit at column 0. Indented, bash treats it as
+  # more script, the if never closes, and the next check runs as a false branch
+  # and reports a failure that has nothing to do with the theme.
+  if python3 - "$REPO_DIR" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+pkg = json.loads((root / "vscode/package.json").read_text())
+# The contributed path is relative to the extension root and starts with "./".
+# Removed as a prefix, not as a character set: stripping characters would turn
+# "./themes/x.json" into "themes/x.json" by luck, and "/themes/x.json" by
+# accident on a leading-dot path.
+raw = pkg["contributes"]["themes"][0]["path"]
+theme_rel = raw[2:] if raw.startswith("./") else raw.lstrip("/")
+theme = json.loads((root / "vscode" / theme_rel).read_text())
+settings = json.loads((root / "vscode/settings.json").read_text())
+label = pkg["contributes"]["themes"][0]["label"]
+want = settings["workbench.colorTheme"]
+if label != theme["name"]:
+    sys.exit(f"package.json label {label!r} != theme name {theme['name']!r}")
+if want != theme["name"]:
+    sys.exit(f"colorTheme {want!r} != theme name {theme['name']!r}")
+print(f"  ok   {theme['name']}: {len(theme['colors'])} colors, "
+      f"{len(theme.get('tokenColors', []))} token rules, label and colorTheme agree")
+PY
+  then
+    :
+  else
+    fail "the vscode theme names do not agree"
+  fi
+
+  # The extension is loaded from ~/.vscode/extensions by name, so the directory
+  # it is linked as has to match the publisher and name in package.json.
+  pub="$(python3 -c "import json;print(json.load(open('$REPO_DIR/vscode/package.json'))['publisher'])")"
+  name="$(python3 -c "import json;print(json.load(open('$REPO_DIR/vscode/package.json'))['name'])")"
+  info "installs as $pub.$name -> ~/.vscode/extensions/archy-theme"
 fi
 
 step "packages"

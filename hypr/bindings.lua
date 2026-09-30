@@ -19,10 +19,10 @@ o.bind("SUPER + CTRL + L", "Lock system", o.script("lock"))
 o.bind("SUPER + ESCAPE", "Power menu", o.script("power-menu"), { locked = true })
 o.bind("XF86PowerOff", "Power menu", o.script("power-menu"), { locked = true })
 
--- Lid and internal display, for a laptop panel. Harmless on a desktop.
-o.bind("switch:on:Lid Switch", nil, "loginctl lock-session", { locked = true })
-o.bind("switch:off:Lid Switch", nil, o.script("monitor-clamshell"), { locked = true })
-o.bind("SUPER + CTRL + DELETE", "Toggle laptop display", o.script("monitor-internal") .. " toggle")
+-- No lid switch and no internal panel. This is a desktop: one HDMI output, no
+-- eDP, nothing under /sys/class/power_supply. The lid bindings and the
+-- clamshell handling that would have gone with them are gone rather than left
+-- bound to keys that can never fire.
 
 -- ---------------------------------------------------------------- apps
 
