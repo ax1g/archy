@@ -28,8 +28,10 @@ local CURSOR_SIZE = 40
 hl.env("XCURSOR_THEME", CURSOR_THEME)
 hl.env("XCURSOR_SIZE", tostring(CURSOR_SIZE))
 
--- For hyprcursor, i.e. the cursor the compositor itself draws.
-hl.env("HYPRCURSOR_THEME", CURSOR_THEME)
+-- For hyprcursor, i.e. the cursor the compositor itself draws. Only the size is
+-- a real variable: HYPRCURSOR_THEME is not read by libhyprcursor, which takes
+-- the theme from gsettings instead (see autostart.lua). Setting it here would
+-- be a dead variable.
 hl.env("HYPRCURSOR_SIZE", tostring(CURSOR_SIZE))
 
 return {

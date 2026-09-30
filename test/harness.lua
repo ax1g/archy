@@ -326,7 +326,7 @@ end
 -- The cursor is the one setting with two independent paths, and getting only
 -- one of them is the failure that looks like it half worked: a macOS pointer
 -- inside X11 apps and the default arrow everywhere else, with no error
--- anywhere. So check that the XCursor vars, the hyprcursor vars, and the
+-- anywhere. So check that the XCursor vars, the hyprcursor size, and the
 -- gsettings write in the session-start callback are all present and agree.
 print("")
 print("cursor wiring")
@@ -335,19 +335,22 @@ local function check_cursor()
   local problems = {}
 
   local x_theme, x_size = env.XCURSOR_THEME, env.XCURSOR_SIZE
-  local h_theme, h_size = env.HYPRCURSOR_THEME, env.HYPRCURSOR_SIZE
+  local h_size = env.HYPRCURSOR_SIZE
 
   if not (x_theme and x_size) then
     problems[#problems + 1] = "XCURSOR_THEME/XCURSOR_SIZE not set (XWayland apps get no theme)"
   end
-  if not (h_theme and h_size) then
-    problems[#problems + 1] = "HYPRCURSOR_THEME/HYPRCURSOR_SIZE not set (compositor cursor unaffected)"
-  end
-  if x_theme and h_theme and x_theme ~= h_theme then
-    problems[#problems + 1] = "theme mismatch: XCURSOR_THEME=" .. x_theme .. " but HYPRCURSOR_THEME=" .. h_theme
+  if not h_size then
+    problems[#problems + 1] = "HYPRCURSOR_SIZE not set (compositor cursor keeps the default size)"
   end
   if x_size and h_size and x_size ~= h_size then
     problems[#problems + 1] = "size mismatch: XCURSOR_SIZE=" .. x_size .. " but HYPRCURSOR_SIZE=" .. h_size
+  end
+  -- HYPRCURSOR_THEME is not a real variable, so setting it would be dead
+  -- config. Caught here because it is exactly the kind of thing that reads as
+  -- correct and does nothing.
+  if env.HYPRCURSOR_THEME then
+    problems[#problems + 1] = "HYPRCURSOR_THEME is set, but nothing reads it; use gsettings"
   end
 
   -- The compositor takes the theme from gsettings, not the env, so the
@@ -368,12 +371,63 @@ local function check_cursor()
     return false
   end
 
-  print(string.format("  %s at %s, set for XWayland, hyprcursor and gsettings",
+  print(string.format("  %s at %s, set for XWayland, hyprcursor size and gsettings",
     x_theme, x_size))
   return true
 end
 
 if not check_cursor() then
+  print("")
+  print("FAIL")
+  os.exit(1)
+end
+
+-- The idle config is a separate parser from everything else, and a key it does
+-- not know means the whole file is ignored: a machine that silently never
+-- locks. Check the keys against the ones hypridle actually documents.
+print("")
+print("idle config")
+local idle_ok, idle_err = pcall(function()
+  local path = os.getenv("ARCHY_ENTRY"):gsub("hyprland%.lua$", "hypridle.conf")
+  local handle = assert(io.open(path, "r"), "cannot read " .. path)
+  local text = handle:read("*a")
+  handle:close()
+
+  -- Strip comments first. The file explains at length why it does *not* blank
+  -- the outputs, and a naive search finds the words in that explanation and
+  -- fails a config that is correct.
+  local code = {}
+  for line in text:gmatch("[^\n]+") do
+    local stripped = line:gsub("#.*$", "")
+    if stripped:match("%S") then
+      code[#code + 1] = stripped
+    end
+  end
+  local body = table.concat(code, "\n")
+
+  if not body:find("on%-timeout") then
+    error("no on-timeout key; the listener block would define no action")
+  end
+  -- exec is not a hypridle listener key. A listener { timeout = N; exec = ... }
+  -- is what an earlier version of this file had, and it parses to nothing,
+  -- which means a machine that silently never locks.
+  if body:match("%f[%w]exec%s*=") then
+    error("hypridle listeners do not have an exec key; it must be on-timeout")
+  end
+  if body:find("dpms%-off") or body:find("dpms%-on") then
+    error("a dpms cycle in an idle listener blanks the outputs while the lock is up, which kills the compositor")
+  end
+  -- Every listener needs a timeout, or it never fires.
+  local listeners = select(2, body:gsub("listener%s*{", ""))
+  local timeouts = select(2, body:gsub("timeout%s*=", ""))
+  if listeners > timeouts then
+    error(("%d listener block(s) but only %d timeout key(s); a block with no timeout never fires"):format(listeners, timeouts))
+  end
+end)
+if idle_ok then
+  print("  on-timeout present, no exec key, no dpms cycle")
+else
+  print("  BROKEN: " .. tostring(idle_err))
   print("")
   print("FAIL")
   os.exit(1)

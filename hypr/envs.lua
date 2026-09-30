@@ -25,8 +25,9 @@ hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_DESKTOP", "hyprland")
 
--- Screensharing through the Hyprland portal needs to know it is on Wayland.
-hl.env("XDG_SHELL", "warp")
+-- Login shell, for anything that asks. Must be a real shell on this machine or
+-- it is a dead value that some tool will try to exec.
+hl.env("XDG_SHELL", "/usr/bin/bash")
 
 -- Compose key.
 hl.env("XCOMPOSEFILE", (os.getenv("HOME") or "") .. "/.XCompose")

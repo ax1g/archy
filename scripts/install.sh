@@ -144,6 +144,28 @@ check_packages() {
 }
 
 # Where each piece is going, and whether something is already there.
+# A missing kitty.conf is worse than a wrong one. The repo's config includes
+# generated/kitty.conf, and kitty exits on a missing include, so on a machine
+# where this was never linked there is no way to open a terminal.
+check_kitty_config() {
+  local conf="$HOME/.config/kitty/kitty.conf"
+
+  if [[ ! -e $conf ]]; then
+    warn "no kitty.conf. kitty needs one: it includes generated/kitty.conf and"
+    warn "exits on a missing include, so there would be no terminal at all."
+    warn "install.sh links it; re-run the installer."
+    return
+  fi
+
+  if [[ -r $conf ]] && grep -qE "include[[:space:]]+.*omarchy" "$conf" 2>/dev/null; then
+    warn "kitty.conf includes a path from a previous setup that no longer"
+    warn "exists, so kitty will refuse to start. install.sh links the repo's"
+    warn "copy, which includes generated/kitty.conf instead."
+  else
+    info "kitty.conf present"
+  fi
+}
+
 check_layout() {
   if [[ -e $ARCHY_HOME ]] && [[ ! -L $ARCHY_HOME ]]; then
     warn "$ARCHY_HOME exists and is not a symlink. Move it aside first:"
@@ -279,6 +301,7 @@ if ((check_only)); then
   check_packages
   check_fonts
   check_cursor
+  check_kitty_config
   check_layout
   step ""
   echo "Nothing was changed. Run without --check to install."
@@ -342,6 +365,11 @@ done
 chmod +x "$REPO_DIR"/scripts/archy-* 2>/dev/null
 info "scripts -> $BIN_DIR (${name:-none})"
 
+# kitty. This one is not optional: the config starts with an include of
+# generated/kitty.conf, and kitty treats a missing include as a hard error, so a
+# machine with no kitty.conf at all cannot start a terminal.
+link_or_report "$REPO_DIR/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf" "kitty.conf"
+
 # X resources for XWayland clients. The file lives in the repo, and this is the
 # conventional path that both `xrdb` and X apps look at, so linking it keeps one
 # copy and the expected location.
@@ -362,6 +390,7 @@ step "archy checks"
 check_compositor
 check_fonts
 check_cursor
+check_kitty_config
 
 step ""
 echo "Installed to $ARCHY_HOME"
