@@ -11,7 +11,7 @@
 
 o = o or {}
 
-local home = os.getenv("HOME") or "/home/archy"
+local home = os.getenv("HOME") or "/home/agx"
 local bin_dir = os.getenv("ARCHY_BIN_DIR") or (home .. "/.local/bin")
 local state_dir = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
 

@@ -4,7 +4,7 @@
 -- reload Hyprland; run `archy-theme sync` to also refresh the generated
 -- Waybar and Wofi stylesheets, then `archy-theme restart` to reload the bar.
 
-local home = os.getenv("HOME") or "/home/archy"
+local home = os.getenv("HOME") or "/home/agx"
 local colors_file = os.getenv("ARCHY_COLORS_FILE") or (home .. "/.config/archy/colors/colors.conf")
 
 local function parse(path)

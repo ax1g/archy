@@ -18,7 +18,7 @@
 --   screencopy.lua  capture permissions
 --   autostart.lua   everything started at session start
 
-local home = os.getenv("HOME") or "/home/archy"
+local home = os.getenv("HOME") or "/home/agx"
 
 -- module path so require("hypr.looknfeel") resolves. Loaded before the helper
 -- layer, because every config file below assumes o.* exists.
