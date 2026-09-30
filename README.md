@@ -90,6 +90,14 @@ If `~/.config/hypr` is already a real directory the installer leaves it alone
 and tells me to move it aside. That is deliberate: I want the old config
 recoverable while I am still finding out whether I like the new one.
 
+**Everyday tools.** `apps.txt` is the list of what I actually use, grouped and
+annotated rather than a flat 180-line dump of `pacman -Qqe`. It is not
+installed by the installer — `install.sh` only installs what archy itself needs
+to run, and the rest is mine to choose. Anything in `apps.txt` marked `[omarchy]`
+comes from that project's own repository, so those need replacing or dropping
+deliberately rather than by accident. The section at the bottom lists the ones
+that will actually break: the kernel package and the neovim config.
+
 **Cursor.** The macOS Apple cursor, which is not an official package, so
 nothing installs it by default. `install.sh` fetches it when it is missing —
 AUR helper if there is one, otherwise the release tarball — and never fails the
@@ -146,6 +154,7 @@ archy/
 │   ├── colors.conf        the theme file
 │   └── themes/            alternates, picked with SUPER+SHIFT+T
 ├── kitty/kitty.conf       terminal
+├── apps.txt               what I actually use, and what to replace
 ├── data/emoji.txt         the SUPER+. picker's list
 ├── waybar/                bar config and stylesheet
 ├── wofi/                  launcher config
