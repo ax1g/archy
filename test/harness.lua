@@ -146,6 +146,23 @@ local function build()
         return { unbind = function() record("unbind_call") end }
       end
 
+      -- hl.permission(binary, type, mode)
+      if name == "permission" then
+        -- Types transcribed from the PERMISSION_TYPE_* symbols in the
+        -- installed binary. The binary pattern itself is a regex in the real
+        -- API (e.g. "/usr/(bin|local/bin)/grim"), so any string goes.
+        local types = { screencopy = true, plugin = true, keyboard = true }
+        if type(args[1]) ~= "string" or type(args[2]) ~= "string"
+          or type(args[3]) ~= "string" then
+          error("archy-test: hl.permission expects (binary, type, mode) strings, got " .. n .. " arg(s)", 2)
+        end
+        if not types[args[2]] then
+          error("archy-test: hl.permission got unknown type '" .. args[2] .. "'", 2)
+        end
+        record("permission")
+        return nil
+      end
+
       -- hl.unbind(keys)
       if name == "unbind" then
         if type(first) ~= "string" then

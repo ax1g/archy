@@ -34,6 +34,21 @@ hl.env("XCURSOR_SIZE", tostring(CURSOR_SIZE))
 -- be a dead variable.
 hl.env("HYPRCURSOR_SIZE", tostring(CURSOR_SIZE))
 
+hl.config({
+  cursor = {
+    -- On by default in 0.56, stated so the theme behavior below does not
+    -- depend on a default surviving the next upgrade. hyprcursor reads the
+    -- theme name from gsettings; autostart.lua sets it to CURSOR_THEME.
+    sync_gsettings_theme = true,
+    -- Software cursor. A virtual GPU (and some NVIDIA setups) cannot scan
+    -- out the hardware cursor plane, and the result is two pointers: the
+    -- compositor's arrow with a corrupt hardware image — usually the X —
+    -- stuck over it. Forcing the compositor to draw the pointer costs one
+    -- blended quad a frame and is invisible everywhere else.
+    no_hardware_cursors = true,
+  },
+})
+
 return {
   theme = CURSOR_THEME,
   size = CURSOR_SIZE,
