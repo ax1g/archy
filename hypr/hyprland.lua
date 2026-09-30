@@ -1,23 +1,24 @@
--- archy: a standalone Hyprland desktop.
+-- archy: my Hyprland desktop.
 --
--- No Omarchy. Hyprland 0.56's native Lua config, a Waybar top bar, Wofi for
--- launching, and one colors file as the single source of truth for the theme.
+-- Hyprland 0.56's native Lua config. A Waybar top bar, Wofi for launching, and
+-- colors/colors.conf as the single source of truth for the theme.
 --
 -- Layout of this directory:
---   hyprland.lua    entry point, module load order
---   helpers.lua     the o.* helper layer over Hyprland's hl.* API
+--   hyprland.lua    this file: module path and load order
+--   helpers.lua     the o.* layer over Hyprland's hl.* API
 --   theme.lua       reads colors/colors.conf
 --   monitors.lua    output and scale
 --   input.lua       keyboard, mouse, touchpad
 --   looknfeel.lua   gaps, decoration, blur, animation
 --   windows.lua     window rules and tags
 --   tiling.lua      core Hyprland bindings
---   bindings.lua    personal bindings
+--   bindings.lua    my bindings
 --   floatcascade.lua  new-window cascade and SUPER+T
 --   qconsole.lua    the Quake console
+--   screencopy.lua  capture permissions
 --   autostart.lua   everything started at session start
 
-local home = os.getenv("HOME") or "/home/agx"
+local home = os.getenv("HOME") or "/home/archy"
 
 -- module path so require("hypr.looknfeel") resolves. Loaded before the helper
 -- layer, because every config file below assumes o.* exists.

@@ -1,12 +1,17 @@
 -- Small helper layer over Hyprland's native Lua API.
 --
--- Omarchy ships an `o.*` namespace of its own. This file is the standalone
--- replacement: same call shapes, no external packages, nothing that reaches
--- into /usr/share/omarchy. Only `hl.*` (stock, Hyprland 0.56) is used.
+-- A namespace of conveniences so the rest of the config stays declarative. Only
+-- hl.* is used, which is stock and requires nothing outside the compositor:
+--   hl.bind        bind a key to a dispatcher or a Lua function
+--   hl.window_rule match windows and apply rules to them
+--   hl.config      set a config section
+--   hl.on          react to compositor events
+--   hl.dsp.*       the dispatchers
+-- See hypr/tiling.lua and hypr/bindings.lua for usage.
 
 o = o or {}
 
-local home = os.getenv("HOME") or "/home/agx"
+local home = os.getenv("HOME") or "/home/archy"
 local bin_dir = os.getenv("ARCHY_BIN_DIR") or (home .. "/.local/bin")
 local state_dir = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
 
@@ -117,9 +122,10 @@ local function command_from(value, description)
   error("archy: unsupported bind target for " .. tostring(description))
 end
 
--- No uwsm wrapper. Omarchy launched apps through universal-workspace-manager
--- for systemd scope isolation; standalone Hyprland does not need it, and
--- dropping it removes the uwsm dependency entirely.
+-- Launch an app with setsid, so it survives the shell that started it.
+--
+-- No scope wrapper: a keybind-started process is a child of the compositor.
+-- systemd-run --user --scope goes here if I ever want scoped units.
 function o.launch(command)
   return "setsid " .. command
 end

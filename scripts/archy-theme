@@ -200,8 +200,7 @@ sync_hyprlock_qml() {
 }
 
 # Kitty takes a plain include line, not a keyfile and not CSS, so the palette
-# is written as kitty color directives. This replaces the theme fragment the
-# terminal used to include from the Omarchy tree.
+# is written as kitty color directives, which kitty/kitty.conf includes.
 sync_kitty_conf() {
   local out="$ARCHY_GENERATED/kitty.conf"
   {

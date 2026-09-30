@@ -1,10 +1,10 @@
--- Autostart. Everything the desktop needs running that Hyprland does not
--- start itself.
+-- Autostart. Everything the desktop needs running that Hyprland does not start
+-- itself.
 --
--- This list is the part of the migration most likely to bite: Omarchy's shell
--- started the notification daemon, clipboard watcher, idle handling and the
--- polkit agent on its own, and nothing in a plain hyprland.conf starts them.
--- If something is missing after the switch, it is almost certainly here.
+-- This list is the part most likely to bite when moving a session to a new
+-- machine: a notification daemon, a clipboard watcher, idle handling and a polkit
+-- agent are all independent programs, and if one is missing here it is simply
+-- absent after a reboot with nothing in the logs to say so.
 
 local bin = o.bin_dir
 

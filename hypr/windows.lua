@@ -1,5 +1,5 @@
 -- Window rules: which windows float, which get tags, and the compositor
--- defaults that used to come from Omarchy's default/hypr/windows.lua.
+-- defaults that decide how windows behave at all.
 
 -- Ignore client maximize requests; the compositor owns the state.
 o.window(".*", { suppress_event = "maximize" })

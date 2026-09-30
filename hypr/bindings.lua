@@ -26,16 +26,11 @@ o.bind("SUPER + CTRL + DELETE", "Toggle laptop display", o.script("monitor-inter
 
 -- ---------------------------------------------------------------- apps
 
--- Your app bindings, unchanged from the current setup. Every entry here was
--- already bound in the Omarchy config; nothing in this section is my choice, and
--- anything I would add goes through you first.
+-- My app bindings.
 o.bind("SUPER + B", "Browser", { launch = "zen-browser" })
 o.bind("SUPER + SHIFT + B", "Browser (private)", { launch = "zen-browser --private" })
--- Omawrite is not bound. It ships from the Omarchy repository, and there is
--- nothing to launch once this is the desktop.
 o.bind("SUPER + D", "Drawy", { launch = "drawy" })
--- Replaces the Omarchy emoji panel. Searches by unicode name, types the
--- selection with wtype.
+-- Emoji picker. Searches by unicode name and types the selection with wtype.
 o.bind("SUPER + PERIOD", "Emoji picker", o.script("emoji"))
 o.bind("SUPER + SLASH", "Visual Studio Code", { launch = "code" })
 o.bind("SUPER + E", "File manager", { launch = "nautilus" })
@@ -180,13 +175,11 @@ o.bind("SUPER + S", "Toggle scratchpad", hl.dsp.workspace.toggle_special("scratc
 o.bind("SUPER + GRAVE", "Toggle Quake console", hl.dsp.workspace.toggle_special("qconsole"))
 o.bind("SUPER + SHIFT + GRAVE", "Move window to Quake console", hl.dsp.window.move({ workspace = "special:qconsole", follow = false }))
 
--- Nothing to unbind here. Coming from Omarchy, this file used to unbind a list
--- of keys that the Omarchy defaults had claimed (SUPER+SHIFT+RETURN for the
--- browser, SUPER+SHIFT+F for the file manager, XF86Calculator, and so on).
--- There are no defaults in a standalone config, so every one of those unbinds
--- was a no-op that hid where a key's behavior actually comes from. If a key
--- seems to do the wrong thing, it is bound twice in this directory — check with
--- `hyprctl binds` rather than looking for a missing unbind.
+-- Nothing to unbind here, and that is deliberate. There are no default bindings
+-- in this config, so an unbind can only ever remove something bound in this same
+-- directory. If a key seems to do the wrong thing, it is bound twice — check
+-- with `hyprctl binds` rather than looking for a missing unbind. The test suite
+-- reports both cases.
 
 -- ---------------------------------------------------------------- media keys
 

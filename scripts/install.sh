@@ -107,11 +107,11 @@ REQUIRED_PACKAGES=(
   udiskie
   # The full Nerd Font weight set, not -basic.
   #
-  # ttf-jetbrains-mono-nerd-basic carries only Regular/Bold/Italic/BoldItalic,
-  # and omarchy pulls that one. Kitty here is set to style="ExtraLight", which
-  # only exists in the full package, so this is a hard requirement rather than a
-  # nicety: with -basic alone, kitty falls back to another weight and stops
-  # matching the rest of the desktop.
+  # ttf-jetbrains-mono-nerd-basic carries only Regular/Bold/Italic/BoldItalic.
+  # Kitty here is set to style="ExtraLight", which only exists in the full
+  # package, so this is a hard requirement rather than a nicety: with -basic
+  # alone, kitty falls back to another weight and stops matching the rest of
+  # the desktop.
   ttf-jetbrains-mono-nerd
 )
 

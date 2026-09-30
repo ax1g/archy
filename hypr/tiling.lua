@@ -1,5 +1,6 @@
 -- Workspace tiling and window movement: the core Hyprland bindings, plus the
--- scripts that replace the Omarchy binaries which used to provide them.
+-- scripts that stand in for the window management I would otherwise be writing
+-- a dispatcher for.
 --
 -- Inspect what is live: hyprctl binds
 
@@ -13,9 +14,9 @@ o.bind("SUPER + F", "Full screen", hl.dsp.window.fullscreen({ mode = "fullscreen
 o.bind("SUPER + CTRL + F", "Tiled full screen", o.script("window-tiled-fullscreen-toggle"))
 o.bind("SUPER + ALT + F", "Full width", hl.dsp.window.fullscreen({ mode = "maximized" }))
 
--- No pseudo-window binding. The default config has one on SUPER+P, but the
--- current setup rebinds that key to btop, which is what it does today. Left
--- unbound rather than moved somewhere you did not ask for.
+-- No pseudo-window binding. The stock config has one on SUPER+P, but I use that
+-- key for btop, so it is left unbound rather than moved somewhere I would have
+-- to remember.
 
 -- Pop a tile out as a pinned float.
 o.bind("SUPER + O", "Pop window out (float & pin)", o.script("window-pop") .. " 1680 945")

@@ -41,9 +41,6 @@ chosen="$(printf '%s\n' "$entries" | wofi --dmenu \
 emoji="$(printf '%s' "$chosen" | cut -f1)"
 [[ -n $emoji ]] || exit 0
 
-# Type it. No delay and no key event: wtype -- simulates the text at the seat
-# level, which is what a native Wayland client expects to receive.
+# Type it. No key events: wtype -- simulates the text at the seat level, which is
+# what a native Wayland client expects to receive.
 wtype -- "$emoji"
-
-# Nothing else to do. The picker stays open if focus returns to it, so a
-# second search is one key away; closing it is the user's call.
